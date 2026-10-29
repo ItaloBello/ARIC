@@ -1,20 +1,19 @@
 package login
 
 import (
+	"ARIC/src/usuario"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
+
 	"strings"
 )
 
 var viaCepURL = "https://viacep.com.br/ws/"
 
-type Login struct {
-	Email string `json:"email"`
-	Senha string `json:"senha"`
-}
+
 
 type Cadastro struct {
 	Nome                string `form:"nome"`
@@ -24,8 +23,8 @@ type Cadastro struct {
 	Foto                *string
 	Bio                 *string `form:"bio"`
 	Cep                 *string `form:"cep"`
-	Estado              *string `form:"estado"`
-	Cidade              *string `form:"cidade"`
+	EstadoID            int     `json:"estado_id"`
+	CidadeID            int     `json:"cidade_id"`
 	Bairro              *string `form:"bairro"`
 	Logradouro          *string `form:"logradouro"`
 	NumeroEndereco      *string `form:"numeroEndereco"`
@@ -39,6 +38,56 @@ type viaCepResponse struct {
 	Localidade string `json:"localidade"`
 	UF         string `json:"uf"`
 	Erro       bool   `json:"erro"`
+}
+
+func (c *Cadastro) ToUsuario() *usuario.Usuario {
+	return &usuario.Usuario{
+		Nome:                sql.NullString{String: c.Nome, Valid: true},
+		Email:               sql.NullString{String: c.Email, Valid: true},
+		SenhaHash:           sql.NullString{String: c.Senha, Valid: true},
+		FotoURL:             sql.NullString{String: *c.Foto, Valid: true},
+		Bio:                 sql.NullString{String: *c.Bio, Valid: true},
+		Cep:                 sql.NullString{String: *c.Cep, Valid: true},
+		Logradouro:          sql.NullString{String: *c.Logradouro, Valid: true},
+		NumeroEndereco:      sql.NullString{String: *c.NumeroEndereco, Valid: true},
+		ComplementoEndereco: sql.NullString{String: *c.ComplementoEndereco, Valid: true},
+	}
+}
+
+func (c *Cadastro) NormalizarBairro() string {
+	// Normaliza o nome do bairro para facilitar buscas e comparações
+	normalizado := *c.Bairro
+
+	// Converte para minúsculas
+	normalizado = strings.ToLower(normalizado)
+
+	// Remove espaços extras
+	normalizado = strings.TrimSpace(normalizado)
+
+	//remover espaços duplicados
+	normalizado = strings.Join(strings.Fields(normalizado), " ")
+
+	// Remove acentos e caracteres especiais
+	normalizado = strings.Map(func(r rune) rune {
+		switch r {
+		case 'á', 'à', 'ã', 'â', 'ä':
+			return 'a'
+		case 'é', 'è', 'ê', 'ë':
+			return 'e'
+		case 'í', 'ì', 'î', 'ï':
+			return 'i'
+		case 'ó', 'ò', 'õ', 'ô', 'ö':
+			return 'o'
+		case 'ú', 'ù', 'û', 'ü':
+			return 'u'
+		case 'ç':
+			return 'c'
+		default:
+			return r
+		}
+	}, normalizado)
+
+	return normalizado
 }
 
 func (c *Cadastro) SenhaValida() (bool, error) {
@@ -67,10 +116,9 @@ func (c *Cadastro) VerificarCep() error {
 	// Se informou CEP, usa o CEP como fonte principal.
 	if c.Cep != nil && strings.TrimSpace(*c.Cep) != "" {
 		return c.buscarPorCep()
+	} else {
+		return errors.New("CEP não informado")
 	}
-
-	// Sem CEP, tenta encontrar pelo endereço.
-	return c.buscarPorEndereco()
 }
 func (c *Cadastro) buscarPorCep() error {
 	cep := strings.TrimSpace(*c.Cep)
@@ -106,71 +154,12 @@ func (c *Cadastro) buscarPorCep() error {
 
 	// Preenche o cadastro.
 	c.Cep = &cep
-	c.Estado = &resposta.UF
-	c.Cidade = &resposta.Localidade
 	c.Bairro = &resposta.Bairro
 	c.Logradouro = &resposta.Logradouro
 
 	return nil
 }
 
-func (c *Cadastro) buscarPorEndereco() error {
-	if c.Estado == nil || strings.TrimSpace(*c.Estado) == "" {
-		return errors.New("estado não informado")
-	}
-
-	if c.Cidade == nil || strings.TrimSpace(*c.Cidade) == "" {
-		return errors.New("cidade não informada")
-	}
-
-	if c.Logradouro == nil || strings.TrimSpace(*c.Logradouro) == "" {
-		return errors.New("logradouro não informado")
-	}
-
-	uf := strings.TrimSpace(*c.Estado)
-	cidade := strings.TrimSpace(*c.Cidade)
-	logradouro := strings.TrimSpace(*c.Logradouro)
-
-	// URL-encoda cada parte do endereço.
-	urlConsulta := viaCepURL +
-		url.PathEscape(uf) + "/" +
-		url.PathEscape(cidade) + "/" +
-		url.PathEscape(logradouro) +
-		"/json/"
-
-	httpResponse, err := http.Get(urlConsulta)
-	if err != nil {
-		return fmt.Errorf("erro ao consultar o endereço: %w", err)
-	}
-	defer httpResponse.Body.Close()
-
-	if httpResponse.StatusCode != http.StatusOK {
-		return errors.New("erro ao consultar o endereço")
-	}
-
-	var respostas []viaCepResponse
-
-	if err := json.NewDecoder(httpResponse.Body).Decode(&respostas); err != nil {
-		return fmt.Errorf("erro ao interpretar resposta do ViaCEP: %w", err)
-	}
-
-	if len(respostas) == 0 {
-		return errors.New("endereço não localizado")
-	}
-
-	// Usa o primeiro resultado.
-	resposta := respostas[0]
-
-	cep := strings.ReplaceAll(resposta.Cep, "-", "")
-
-	c.Cep = &cep
-	c.Estado = &resposta.UF
-	c.Cidade = &resposta.Localidade
-	c.Bairro = &resposta.Bairro
-	c.Logradouro = &resposta.Logradouro
-
-	return nil
-}
 
 func hasUppercase(s string) bool {
 	for _, r := range s {

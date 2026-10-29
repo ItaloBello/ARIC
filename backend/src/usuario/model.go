@@ -33,10 +33,17 @@ func (u *Usuario) TableName() string {
 	return "usuario"
 }
 
-func (u *Usuario) HashSenha(senha string) {
-	hash, err := hashsenha.Encriptar(senha)
+func (u *Usuario) HashSenha() {
+	hash, err := hashsenha.Encriptar(u.SenhaHash.String)
 	if err != nil {
 		fmt.Println("[Usuario - HashSenha] Erro ao encriptar a senha:", err)
 	}
 	u.SenhaHash = sql.NullString{String: hash, Valid: true}
+}
+
+func (u *Usuario) VerificarSenha(senha string) bool {
+	if err:= hashsenha.CompararSenha(senha, u.SenhaHash.String); err != nil{
+		return false
+	}
+	return true
 }
