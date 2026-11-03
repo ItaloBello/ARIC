@@ -46,16 +46,61 @@ CREATE TABLE IF NOT EXISTS aric.usuarios (
     sequencia_dias INT DEFAULT 0
 );
 
-
+CREATE TABLE IF NOT EXISTS aric.dificuldades_projetos (
+    id INT PRIMARY KEY,
+    descricao VARCHAR(255) NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS aric.projetos (
     id SERIAL PRIMARY KEY,
     titulo VARCHAR(255) NOT NULL,
     subtitulo VARCHAR(255) NOT NULL,
     descricao TEXT NOT NULL,
-    dificuldade INTEGER NOT NULL REFERENCES aric.dificuldades_projeto(numero),
+    dificuldade INTEGER NOT NULL REFERENCES aric.dificuldades_projetos(id),
     xp INTEGER NOT NULL,
     tempo_estimado INTEGER NOT NULL, -- tempo estimado em minutos
     data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS aric.categorias (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(255) NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS aric.projetos_categorias (
+    projeto_id INT NOT NULL REFERENCES aric.projetos(id),
+    categoria_id INT NOT NULL REFERENCES aric.categorias(id),
+    PRIMARY KEY (projeto_id, categoria_id)
+);
+
+CREATE TABLE IF NOT EXISTS aric.projetos_materiais (
+    projeto_id INT NOT NULL REFERENCES aric.projetos(id),
+    material VARCHAR(255) NOT NULL,
+    quantidade VARCHAR(255) NOT NULL,
+    PRIMARY KEY (projeto_id, material)
+);
+
+CREATE TABLE IF NOT EXISTS aric.projetos_passos (
+    projeto_id INT NOT NULL REFERENCES aric.projetos(id),
+    passo_numero INT NOT NULL,
+    descricao TEXT NOT NULL,
+    titulo VARCHAR(255) NOT NULL,
+    PRIMARY KEY (projeto_id, passo_numero)
+);
+
+CREATE TABLE IF NOT EXISTS aric.projetos_midia (
+    projeto_id INT NOT NULL REFERENCES aric.projetos(id),
+    midia_url VARCHAR(255) NOT NULL,
+    tipo_midia VARCHAR(50) NOT NULL, -- 'imagem' ou 'video'
+    PRIMARY KEY (projeto_id, midia_url)
+);
+
+CREATE TABLE IF NOT EXISTS aric.projetos_conclusoes (
+    projeto_id INT NOT NULL REFERENCES aric.projetos(id),
+    usuario_id INT NOT NULL REFERENCES aric.usuarios(id),
+    data_conclusao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    validado BOOLEAN DEFAULT FALSE,
+    PRIMARY KEY (projeto_id, usuario_id)
+);
+
