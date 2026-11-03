@@ -9,22 +9,13 @@ type Bairro struct {
 	CidadeID        int    `json:"cidadeId" db:"cidade_id"`
 }
 
-func (b *Bairro) TableName() string {
-	return "bairros"
-}
+// Normalizar deixa o nome em minúsculas, sem acentos e sem espaços repetidos,
+// para que "Jd. São Paulo" e "jd. sao  paulo" caiam no mesmo bairro.
+func Normalizar(nome string) string {
+	n := strings.ToLower(nome)
+	n = strings.Join(strings.Fields(n), " ")
 
-func (b *Bairro) NormalizarBairro() {
-	// Normaliza o nome do bairro para facilitar buscas e comparações
-	normalizado := b.Nome
-
-	// Converte para minúsculas
-	normalizado = strings.ToLower(normalizado)
-
-	// Remove espaços extras
-	normalizado = strings.TrimSpace(normalizado)
-
-	// Remove acentos e caracteres especiais
-	normalizado = strings.Map(func(r rune) rune {
+	return strings.Map(func(r rune) rune {
 		switch r {
 		case 'á', 'à', 'ã', 'â', 'ä':
 			return 'a'
@@ -38,10 +29,10 @@ func (b *Bairro) NormalizarBairro() {
 			return 'u'
 		case 'ç':
 			return 'c'
+		case 'ñ':
+			return 'n'
 		default:
 			return r
 		}
-	}, normalizado)
-
-	b.NomeNormalizado = normalizado
+	}, n)
 }

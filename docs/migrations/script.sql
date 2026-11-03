@@ -1,4 +1,8 @@
-CREATE DATABASE IF NOT EXISTS aric;
+-- O banco é criado uma vez, fora deste script (Postgres não tem CREATE DATABASE IF NOT EXISTS):
+--   CREATE DATABASE aric;
+-- Depois, conectado no banco aric:
+
+CREATE SCHEMA IF NOT EXISTS aric;
 
 --Tabelas básicas para armazenar informações de usuários, níveis e localização geográfica (estado, cidade, bairro).
 CREATE TABLE IF NOT EXISTS aric.estados (
@@ -17,14 +21,13 @@ CREATE TABLE IF NOT EXISTS aric.bairros (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
     nome_normalizado VARCHAR(255) NOT NULL,
-    cidade_id INT NOT NULL REFERENCES aric.cidades(id)
+    cidade_id INT NOT NULL REFERENCES aric.cidades(id),
+    CONSTRAINT unique_bairro_cidade UNIQUE (nome_normalizado, cidade_id)
 );
-
-ALTER TABLE aric.bairros ADD CONSTRAINT unique_bairro_cidade UNIQUE (nome_normalizado, cidade_id);
 
 CREATE TABLE IF NOT EXISTS aric.niveis (
     id SERIAL PRIMARY KEY,
-    numero INT NOT NULL,
+    numero INT NOT NULL UNIQUE,
     titulo VARCHAR(255) NOT NULL,
     minimo_xp INT NOT NULL
 );
@@ -32,18 +35,21 @@ CREATE TABLE IF NOT EXISTS aric.niveis (
 CREATE TABLE IF NOT EXISTS aric.usuarios (
     id SERIAL PRIMARY KEY,
     nome VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE, -- gravado sempre em minúsculas
     senha_hash VARCHAR(255) NOT NULL,
     foto_url VARCHAR(255),
     bio TEXT,
-    cep VARCHAR(20) NOT NULL,
-    bairro_id INT REFERENCES aric.bairros (id) NOT NULL,
+    cep VARCHAR(8) NOT NULL, -- só dígitos
+    bairro_id INT NOT NULL REFERENCES aric.bairros(id),
     logradouro VARCHAR(255) NOT NULL,
     numero_endereco VARCHAR(20) NOT NULL,
     complemento_endereco VARCHAR(255),
-    xp_total INT DEFAULT 0,
+    xp_total INT NOT NULL DEFAULT 0,
     nivel_id INT REFERENCES aric.niveis(id),
-    sequencia_dias INT DEFAULT 0
+    sequencia_dias INT NOT NULL DEFAULT 0,
+    criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+    deletado_em TIMESTAMPTZ
 );
 
 CREATE TABLE IF NOT EXISTS aric.dificuldades_projetos (

@@ -6,7 +6,3 @@ type Nivel struct {
 	Titulo   string `json:"titulo" db:"titulo"`
 	MinimoXP int    `json:"minimoXp" db:"minimo_xp"`
 }
-
-func (n *Nivel) TableName() string {
-	return "nivel"
-}

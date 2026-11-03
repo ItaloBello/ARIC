@@ -36,6 +36,11 @@ func Internal(message string) *AppError {
 	return &AppError{Message: message, StatusCode: http.StatusInternalServerError}
 }
 
+// BadGateway indica falha em um serviço externo (ex.: ViaCEP fora do ar).
+func BadGateway(message string) *AppError {
+	return &AppError{Message: message, StatusCode: http.StatusBadGateway}
+}
+
 func Created(message string) *AppError {
 	return &AppError{Message: message, StatusCode: http.StatusCreated}
 }

@@ -1,10 +1,13 @@
 package login
 
 import (
+	"ARIC/src/middleware"
 	"ARIC/utils/apperror"
-	"ARIC/utils/uploader"
 	"errors"
+	"log"
+	"mime/multipart"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,64 +20,73 @@ func NewLoginController(uc *LoginUseCases) *LoginController {
 	return &LoginController{uc: uc}
 }
 
+// Registro aceita multipart/form-data (com campo opcional "foto") ou JSON.
 func (ct *LoginController) Registro(c *gin.Context) {
 	var request Cadastro
 	if err := c.ShouldBind(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Erro ao processar os dados de cadastro"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "erro ao processar os dados de cadastro"})
 		return
 	}
 
-	file, err := c.FormFile("foto")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Erro ao processar o arquivo de foto"})
-		return
-	}
-
-	if file != nil {
-		result, err := uploader.SaveFile(file, uploader.UploadConfig{
-			DestFolder:   "./uploads/usuarios",
-			BaseURL:      "/uploads/usuarios",
-			MaxSize:      5 * 1024 * 1024, // 5MB
-			AllowedTypes: []string{".jpg", ".jpeg", ".png"},
-		})
-
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var foto *multipart.FileHeader
+	if strings.HasPrefix(c.ContentType(), "multipart/form-data") {
+		f, err := c.FormFile("foto")
+		switch {
+		case errors.Is(err, http.ErrMissingFile):
+			// foto é opcional
+		case err != nil:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "erro ao processar o arquivo de foto"})
 			return
+		default:
+			foto = f
 		}
-
-		request.Foto = &result.URL
 	}
 
-	err = ct.uc.Registro(request)
+	resp, err := ct.uc.Registro(c.Request.Context(), request, foto)
 	if err != nil {
-		var apperr *apperror.AppError
-		if errors.As(err, &apperr) {
-			c.IndentedJSON(apperr.StatusCode, gin.H{"error": apperr.Message})
-			return
-		}
-		c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		responderErro(c, err)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{"message": "Usuário cadastrado com sucesso"})
+	c.JSON(http.StatusCreated, resp)
 }
 
 func (ct *LoginController) Login(c *gin.Context) {
 	var request Login
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Erro ao processar os dados de login"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "erro ao processar os dados de login"})
 		return
 	}
 
-	usuario, err := ct.uc.Login(request)
+	resp, err := ct.uc.Login(c.Request.Context(), request)
 	if err != nil {
-		var apperr *apperror.AppError
-		if errors.As(err, &apperr) {
-			c.IndentedJSON(apperr.StatusCode, gin.H{"error": apperr.Message})
-			return
-		}
-		c.IndentedJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		responderErro(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Login realizado com sucesso", "usuario": usuario})
+	c.JSON(http.StatusOK, resp)
+}
+
+// Me devolve o usuário dono do token.
+func (ct *LoginController) Me(c *gin.Context) {
+	id, ok := middleware.UsuarioID(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "não autenticado"})
+		return
+	}
+
+	resp, err := ct.uc.Me(c.Request.Context(), id)
+	if err != nil {
+		responderErro(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func responderErro(c *gin.Context, err error) {
+	var appErr *apperror.AppError
+	if errors.As(err, &appErr) {
+		c.JSON(appErr.StatusCode, gin.H{"error": appErr.Message})
+		return
+	}
+	log.Println("[login] erro não tratado:", err)
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "erro interno"})
 }

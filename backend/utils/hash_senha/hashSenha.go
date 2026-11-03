@@ -7,9 +7,10 @@ func Encriptar(senha string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(hash), err
+	return string(hash), nil
 }
 
+// CompararSenha retorna nil se a senha em texto puro corresponde ao hash.
 func CompararSenha(hash, senha string) error {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(senha))
 }

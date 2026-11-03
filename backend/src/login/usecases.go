@@ -1,105 +1,189 @@
 package login
 
 import (
+	"ARIC/src/bairro"
 	"ARIC/src/usuario"
 	"ARIC/utils/apperror"
+	hashsenha "ARIC/utils/hash_senha"
+	"ARIC/utils/token"
+	"ARIC/utils/uploader"
+	"ARIC/utils/viacep"
+	"context"
 	"database/sql"
+	"errors"
+	"log"
+	"mime/multipart"
+	"strings"
 )
 
+var configFotoUsuario = uploader.UploadConfig{
+	DestFolder:   "./uploads/usuarios",
+	BaseURL:      "/uploads/usuarios",
+	MaxSize:      5 * 1024 * 1024, // 5MB
+	AllowedTypes: []string{".jpg", ".jpeg", ".png"},
+}
+
+// Hash usado quando o e-mail não existe, para o login levar o mesmo tempo
+// e não revelar quais e-mails estão cadastrados.
+var hashFalso, _ = hashsenha.Encriptar("senha-falsa-para-tempo-constante")
+
 type LoginUseCases struct {
-	repo *LoginRepository
+	repo   *LoginRepository
+	cep    *viacep.Client
+	tokens *token.Manager
 }
 
-func NewLoginUseCases(repo *LoginRepository) *LoginUseCases {
-	return &LoginUseCases{repo: repo}
+func NewLoginUseCases(repo *LoginRepository, cep *viacep.Client, tokens *token.Manager) *LoginUseCases {
+	return &LoginUseCases{repo: repo, cep: cep, tokens: tokens}
 }
 
-func (u *LoginUseCases) Registro(c Cadastro) error {
-	if !(c.Senha == c.ConfirmarSenha) {
-		return apperror.BadRequest("senhas devem ser iguais")
+// Registro valida tudo, só então salva a foto (se houver) e cria o usuário.
+// Devolve o usuário já autenticado.
+func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipart.FileHeader) (*AuthResponse, error) {
+	c.Normalizar()
+	if err := c.Validar(); err != nil {
+		return nil, apperror.BadRequest(err.Error())
 	}
-	senhaValida, err := c.SenhaValida()
+
+	existe, err := u.repo.EmailExiste(ctx, c.Email)
 	if err != nil {
-		return apperror.BadRequest(err.Error())
+		return nil, interno("erro ao verificar e-mail", err)
 	}
-	if !senhaValida {
-		return apperror.BadRequest("a senha é inválida")
-	}
-
-	if c.EstadoID <= 0 {
-		return apperror.BadRequest("estado inválido")
-	}
-	if c.CidadeID <= 0 {
-		return apperror.BadRequest("cidade inválida")
+	if existe {
+		return nil, apperror.Conflict("e-mail já cadastrado")
 	}
 
-	if c.Cep == nil || *c.Cep == "" {
-		return apperror.BadRequest("cep não informado")
+	// Endereço a partir do CEP
+	end, err := u.cep.Buscar(ctx, c.Cep)
+	switch {
+	case errors.Is(err, viacep.ErrCepInvalido), errors.Is(err, viacep.ErrCepNaoEncontrado):
+		return nil, apperror.BadRequest(err.Error())
+	case err != nil:
+		log.Println("[Registro] ViaCEP:", err)
+		return nil, apperror.BadGateway("não foi possível consultar o CEP agora, tente novamente")
 	}
 
-	// Verifica se a cidade pertence ao estado selecionado
-	cidade, err := u.repo.GetCidadeByIDEstadoID(c.CidadeID, c.EstadoID)
+	cid, err := u.repo.GetCidadeByNomeUF(ctx, end.Localidade, end.UF)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperror.BadRequest("cidade do CEP não encontrada: " + end.Localidade + "/" + end.UF)
+	}
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return apperror.BadRequest("cidade não pertence ao estado selecionado")
-		}
-		return apperror.Internal("erro ao buscar cidade: " + err.Error())
+		return nil, interno("erro ao buscar cidade", err)
 	}
 
-	err = c.VerificarCep()
+	// CEP único de cidade pequena vem sem bairro/logradouro: usa o que o usuário digitou
+	nomeBairro := primeiroNaoVazio(end.Bairro, c.Bairro)
+	if nomeBairro == "" {
+		return nil, apperror.BadRequest("este CEP não informa o bairro, preencha o campo bairro")
+	}
+	logradouro := primeiroNaoVazio(end.Logradouro, c.Logradouro)
+	if logradouro == "" {
+		return nil, apperror.BadRequest("este CEP não informa a rua, preencha o campo logradouro")
+	}
+
+	bairroID, err := u.repo.UpsertBairro(ctx, nomeBairro, bairro.Normalizar(nomeBairro), cid.ID)
 	if err != nil {
-		return apperror.BadRequest("erro ao verificar CEP: " + err.Error())
+		return nil, interno("erro ao salvar bairro", err)
 	}
 
-	if c.Bairro == nil || *c.Bairro == "" {
-		return apperror.BadRequest("bairro não encontrado para o CEP informado")
+	nivelID, err := u.repo.GetNivelInicialID(ctx)
+	if err != nil {
+		return nil, interno("erro ao buscar nível inicial (a tabela aric.niveis está populada?)", err)
 	}
 
-	bairroNormalizado := c.NormalizarBairro()
+	novo := &usuario.Usuario{
+		Nome:                c.Nome,
+		Email:               c.Email,
+		Bio:                 usuario.NullString(c.Bio),
+		Cep:                 c.Cep,
+		BairroID:            bairroID,
+		Logradouro:          logradouro,
+		NumeroEndereco:      c.NumeroEndereco,
+		ComplementoEndereco: usuario.NullString(c.ComplementoEndereco),
+		NivelID:             sql.NullInt64{Int64: int64(nivelID), Valid: true},
+	}
+	if err := novo.DefinirSenha(c.Senha); err != nil {
+		return nil, interno("erro ao gerar hash da senha", err)
+	}
 
-	var bairroID int
-
-	// Busca o bairro dentro da cidade
-	bairro, err := u.repo.GetBairroByNomeCidade(bairroNormalizado, cidade.ID)
-	if err == sql.ErrNoRows {
-		// Bairro ainda não existe
-		bairroID, err = u.repo.CreateBairro(*c.Bairro, bairroNormalizado, cidade.ID)
+	// Foto por último, para não sobrar arquivo órfão quando a validação falha
+	if foto != nil {
+		res, err := uploader.SaveFile(foto, configFotoUsuario)
 		if err != nil {
-			return apperror.Internal("erro ao criar bairro: " + err.Error())
+			return nil, apperror.BadRequest(err.Error())
 		}
-	} else if err != nil {
-		return apperror.Internal("erro ao buscar bairro: " + err.Error())
-	} else {
-		// Bairro já existe
-		bairroID = bairro.ID
+		novo.FotoURL = usuario.NullString(res.URL)
 	}
 
-	user := c.ToUsuario()
-	user.HashSenha()
-	user.BairroID = sql.NullInt64{Int64: int64(bairroID), Valid: true}
-
-	_, err = u.repo.CreateUsuario(user)
+	criado, err := u.repo.CreateUsuario(ctx, novo)
 	if err != nil {
-		return apperror.Internal("erro ao criar usuario: " + err.Error())
+		if novo.FotoURL.Valid {
+			if delErr := uploader.DeleteFile(novo.FotoURL.String); delErr != nil {
+				log.Println("[Registro] erro ao remover foto órfã:", delErr)
+			}
+		}
+		if errors.Is(err, ErrEmailDuplicado) {
+			return nil, apperror.Conflict("e-mail já cadastrado")
+		}
+		return nil, interno("erro ao criar usuário", err)
 	}
 
-	return nil
+	return u.autenticar(criado)
 }
 
-func (u *LoginUseCases) Login(l Login) (*usuario.Usuario, error) {
-	user := l.ToUsuario()
-	usuarioDB, err := u.repo.GetUsuarioByEmail(user.Email.String)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, apperror.Unauthorized("email ou senha inválidos")
-		}
-		return nil, apperror.Internal("erro ao buscar usuário: " + err.Error())
+func (u *LoginUseCases) Login(ctx context.Context, l Login) (*AuthResponse, error) {
+	email := strings.ToLower(strings.TrimSpace(l.Email))
+	if email == "" || l.Senha == "" {
+		return nil, apperror.BadRequest("informe e-mail e senha")
 	}
-	if !user.VerificarSenha(usuarioDB.SenhaHash.String) {
-		return nil, apperror.Unauthorized("email ou senha inválidos")
-	}
-	
-	usuarioDB.SenhaHash = sql.NullString{} // Limpa a senha antes de retornar
 
-	return usuarioDB, nil
+	user, err := u.repo.GetUsuarioByEmail(ctx, email)
+	if errors.Is(err, sql.ErrNoRows) {
+		_ = hashsenha.CompararSenha(hashFalso, l.Senha)
+		return nil, apperror.Unauthorized("e-mail ou senha inválidos")
+	}
+	if err != nil {
+		return nil, interno("erro ao buscar usuário", err)
+	}
+
+	if !user.VerificarSenha(l.Senha) {
+		return nil, apperror.Unauthorized("e-mail ou senha inválidos")
+	}
+
+	return u.autenticar(user)
+}
+
+func (u *LoginUseCases) Me(ctx context.Context, id int) (*usuario.UsuarioResponse, error) {
+	user, err := u.repo.GetUsuarioByID(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperror.NotFound("usuário não encontrado")
+	}
+	if err != nil {
+		return nil, interno("erro ao buscar usuário", err)
+	}
+	resp := user.ToResponse()
+	return &resp, nil
+}
+
+func (u *LoginUseCases) autenticar(user *usuario.Usuario) (*AuthResponse, error) {
+	tok, expira, err := u.tokens.Gerar(user.ID)
+	if err != nil {
+		return nil, interno("erro ao gerar token", err)
+	}
+	return &AuthResponse{Token: tok, ExpiraEm: expira, Usuario: user.ToResponse()}, nil
+}
+
+// interno registra o erro real no log e devolve uma mensagem genérica ao cliente.
+func interno(msg string, err error) error {
+	log.Printf("[login] %s: %v", msg, err)
+	return apperror.Internal(msg)
+}
+
+func primeiroNaoVazio(valores ...string) string {
+	for _, v := range valores {
+		if strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }

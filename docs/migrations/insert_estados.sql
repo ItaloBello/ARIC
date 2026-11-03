@@ -26,3 +26,5 @@ INSERT INTO aric.estados (id, nome, sigla) VALUES
     (25, 'São Paulo', 'SP'),
     (26, 'Sergipe', 'SE'),
     (27, 'Tocantins', 'TO');
+
+SELECT setval(pg_get_serial_sequence('aric.estados', 'id'), (SELECT MAX(id) FROM aric.estados));

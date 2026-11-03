@@ -2,7 +2,7 @@ package login
 
 import (
 	"ARIC/src/usuario"
-	"database/sql"
+	"time"
 )
 
 type Login struct {
@@ -10,9 +10,9 @@ type Login struct {
 	Senha string `json:"senha"`
 }
 
-func (l *Login) ToUsuario() *usuario.Usuario {
-	return &usuario.Usuario{
-		Email:     sql.NullString{String: l.Email, Valid: true},
-		SenhaHash: sql.NullString{String: l.Senha, Valid: true},
-	}
+// AuthResponse é devolvido no login e no registro (o usuário já sai logado).
+type AuthResponse struct {
+	Token    string                  `json:"token"`
+	ExpiraEm time.Time               `json:"expiraEm"`
+	Usuario  usuario.UsuarioResponse `json:"usuario"`
 }

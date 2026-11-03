@@ -9,25 +9,21 @@ import (
 )
 
 func ConnectDB() (*sqlx.DB, error) {
-	host := os.Getenv("DB_HOST")
-	port := os.Getenv("DB_PORT")
-	user := os.Getenv("DB_USER")
-	password := os.Getenv("DB_PASS")
-	dbname := os.Getenv("DB_NAME")
-	
-	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
+	sslmode := os.Getenv("DB_SSLMODE")
+	if sslmode == "" {
+		sslmode = "disable"
+	}
 
+	psqlInfo := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"),
+		os.Getenv("DB_PASS"), os.Getenv("DB_NAME"), sslmode)
+
+	// sqlx.Connect já faz o Ping
 	db, err := sqlx.Connect("postgres", psqlInfo)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 
-	
-	if err := db.Ping(); err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Successfully connected to the database! " + dbname)
+	fmt.Println("Successfully connected to the database! " + os.Getenv("DB_NAME"))
 	return db, nil
 }
