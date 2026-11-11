@@ -3,6 +3,7 @@ package router
 import (
 	"ARIC/src/login"
 	"ARIC/src/middleware"
+	"ARIC/src/projeto"
 	"ARIC/utils/token"
 	"ARIC/utils/viacep"
 	"os"
@@ -25,4 +26,8 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB, tokens *token.Manager) {
 	loginRepo := login.NewLoginRepository(db)
 	loginUC := login.NewLoginUseCases(loginRepo, cep, tokens)
 	login.SetupLoginRoutes(v1, login.NewLoginController(loginUC), auth)
+
+	projetoRepo := projeto.NewRepository(db)
+	projetoUC := projeto.NewUseCases(projetoRepo)
+	projeto.SetupRoutes(v1, projeto.NewController(projetoUC), projetoRepo, auth)
 }

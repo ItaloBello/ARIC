@@ -4,7 +4,6 @@ import (
 	"ARIC/src/middleware"
 	"ARIC/utils/apperror"
 	"errors"
-	"log"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -82,11 +81,5 @@ func (ct *LoginController) Me(c *gin.Context) {
 }
 
 func responderErro(c *gin.Context, err error) {
-	var appErr *apperror.AppError
-	if errors.As(err, &appErr) {
-		c.JSON(appErr.StatusCode, gin.H{"error": appErr.Message})
-		return
-	}
-	log.Println("[login] erro não tratado:", err)
-	c.JSON(http.StatusInternalServerError, gin.H{"error": "erro interno"})
+	apperror.Responder(c, err)
 }

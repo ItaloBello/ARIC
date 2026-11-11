@@ -22,7 +22,7 @@ func NewLoginRepository(db *sqlx.DB) *LoginRepository {
 }
 
 const colunasUsuario = `id, nome, email, senha_hash, foto_url, bio, cep, bairro_id, logradouro,
-	numero_endereco, complemento_endereco, xp_total, nivel_id, sequencia_dias,
+	numero_endereco, complemento_endereco, xp_total, nivel_id, sequencia_dias, papel,
 	criado_em, atualizado_em, deletado_em`
 
 // GetCidadeByNomeUF busca a cidade retornada pelo ViaCEP (localidade + uf).

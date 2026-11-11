@@ -21,6 +21,7 @@ type Usuario struct {
 	XpTotal             int            `db:"xp_total"`
 	NivelID             sql.NullInt64  `db:"nivel_id"`
 	SequenciaDias       int            `db:"sequencia_dias"`
+	Papel               string         `db:"papel"`
 	CriadoEm            time.Time      `db:"criado_em"`
 	AtualizadoEm        time.Time      `db:"atualizado_em"`
 	DeletadoEm          sql.NullTime   `db:"deletado_em"`
@@ -41,6 +42,7 @@ type UsuarioResponse struct {
 	XpTotal             int       `json:"xpTotal"`
 	NivelID             *int64    `json:"nivelId"`
 	SequenciaDias       int       `json:"sequenciaDias"`
+	Papel               string    `json:"papel"` // usuario | moderador | admin
 	CriadoEm            time.Time `json:"criadoEm"`
 }
 
@@ -72,6 +74,7 @@ func (u *Usuario) ToResponse() UsuarioResponse {
 		XpTotal:             u.XpTotal,
 		NivelID:             intPtr(u.NivelID),
 		SequenciaDias:       u.SequenciaDias,
+		Papel:               u.Papel,
 		CriadoEm:            u.CriadoEm,
 	}
 }
