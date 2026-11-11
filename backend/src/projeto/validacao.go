@@ -3,10 +3,11 @@ package projeto
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path"
 	"strings"
 	"unicode/utf8"
+
+	"ARIC/utils/uploader"
+	"ARIC/utils/web"
 )
 
 const (
@@ -18,8 +19,6 @@ const (
 	maxImagens     = 10
 	maxComentario  = 2000
 	maxMotivo      = 500
-	limitePadrao   = 20
-	limiteMaximo   = 50
 	maxTempoMinuto = 7 * 24 * 60
 )
 
@@ -176,17 +175,9 @@ func (r *ProjetoRequest) validarImagens() error {
 	return nil
 }
 
-// validarURLImagem só aceita imagens enviadas por POST /projetos/imagens
-// (impede apontar para qualquer arquivo ou site).
+// validarURLImagem só aceita imagens enviadas por POST /projetos/imagens.
 func validarURLImagem(u string) error {
-	nome := strings.TrimPrefix(u, urlImagens+"/")
-	if nome == u || nome == "" || nome != path.Base(nome) || strings.HasPrefix(nome, ".") {
-		return fmt.Errorf("imagem inválida: %s (envie antes em /projetos/imagens)", u)
-	}
-	if _, err := os.Stat(path.Join(pastaImagens, nome)); err != nil {
-		return fmt.Errorf("imagem não encontrada: %s", u)
-	}
-	return nil
+	return uploader.URLLocal(u, configImagem)
 }
 
 func tamanho(campo, valor string, min, max int) error {
@@ -210,10 +201,10 @@ func (f *Filtros) normalizar() {
 		f.Pagina = 1
 	}
 	if f.Limite < 1 {
-		f.Limite = limitePadrao
+		f.Limite = web.LimitePadrao
 	}
-	if f.Limite > limiteMaximo {
-		f.Limite = limiteMaximo
+	if f.Limite > web.LimiteMaximo {
+		f.Limite = web.LimiteMaximo
 	}
 	switch f.Ordem {
 	case "populares":
@@ -224,17 +215,4 @@ func (f *Filtros) normalizar() {
 	default:
 		f.Ordem = "recentes"
 	}
-}
-
-func paginacao(pagina, limite int) (int, int) {
-	if pagina < 1 {
-		pagina = 1
-	}
-	if limite < 1 {
-		limite = limitePadrao
-	}
-	if limite > limiteMaximo {
-		limite = limiteMaximo
-	}
-	return pagina, limite
 }

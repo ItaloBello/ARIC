@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"ARIC/utils/web"
 )
 
 // prepararImagens cria uploads/projetos com dois arquivos num diretório temporário
@@ -105,13 +107,13 @@ func TestRascunhoPodeSerIncompleto(t *testing.T) {
 func TestFiltrosNormalizar(t *testing.T) {
 	f := Filtros{Limite: 500, Ordem: "relevancia"}
 	f.normalizar()
-	if f.Pagina != 1 || f.Limite != limiteMaximo || f.Ordem != "recentes" {
+	if f.Pagina != 1 || f.Limite != web.LimiteMaximo || f.Ordem != "recentes" {
 		t.Errorf("normalização inesperada: %+v", f)
 	}
 
 	f = Filtros{Busca: " garrafa ", Ordem: "relevancia"}
 	f.normalizar()
-	if f.Busca != "garrafa" || f.Ordem != "relevancia" || f.Limite != limitePadrao {
+	if f.Busca != "garrafa" || f.Ordem != "relevancia" || f.Limite != web.LimitePadrao {
 		t.Errorf("normalização inesperada: %+v", f)
 	}
 

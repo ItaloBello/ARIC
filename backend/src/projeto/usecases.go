@@ -11,8 +11,10 @@ import (
 
 	"ARIC/src/infra/database"
 	"ARIC/src/missao"
+	"ARIC/src/xp"
 	"ARIC/utils/apperror"
 	"ARIC/utils/uploader"
+	"ARIC/utils/web"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -93,7 +95,7 @@ func (u *UseCases) basePublicado(ctx context.Context, usuarioID, projetoID int) 
 
 // ---------- leitura ----------
 
-func (u *UseCases) Listar(ctx context.Context, usuarioID int, f Filtros) (*Pagina[Card], error) {
+func (u *UseCases) Listar(ctx context.Context, usuarioID int, f Filtros) (*web.Pagina[Card], error) {
 	f.normalizar()
 	c := consulta{
 		usuarioID:     usuarioID,
@@ -127,8 +129,8 @@ func (u *UseCases) Listar(ctx context.Context, usuarioID int, f Filtros) (*Pagin
 }
 
 // Meus lista os projetos do próprio usuário em qualquer status (menos removido).
-func (u *UseCases) Meus(ctx context.Context, usuarioID, pagina, limite int) (*Pagina[Card], error) {
-	pagina, limite = paginacao(pagina, limite)
+func (u *UseCases) Meus(ctx context.Context, usuarioID, pagina, limite int) (*web.Pagina[Card], error) {
+	pagina, limite = web.Paginacao(pagina, limite)
 	return u.listar(ctx, consulta{
 		usuarioID: usuarioID,
 		autorID:   usuarioID,
@@ -139,8 +141,8 @@ func (u *UseCases) Meus(ctx context.Context, usuarioID, pagina, limite int) (*Pa
 	}, pagina)
 }
 
-func (u *UseCases) Salvos(ctx context.Context, usuarioID, pagina, limite int) (*Pagina[Card], error) {
-	pagina, limite = paginacao(pagina, limite)
+func (u *UseCases) Salvos(ctx context.Context, usuarioID, pagina, limite int) (*web.Pagina[Card], error) {
+	pagina, limite = web.Paginacao(pagina, limite)
 	return u.listar(ctx, consulta{
 		usuarioID:     usuarioID,
 		ordem:         "recentes",
@@ -152,8 +154,8 @@ func (u *UseCases) Salvos(ctx context.Context, usuarioID, pagina, limite int) (*
 }
 
 // FilaModeracao: projetos aguardando revisão, mais antigos primeiro.
-func (u *UseCases) FilaModeracao(ctx context.Context, usuarioID, pagina, limite int) (*Pagina[Card], error) {
-	pagina, limite = paginacao(pagina, limite)
+func (u *UseCases) FilaModeracao(ctx context.Context, usuarioID, pagina, limite int) (*web.Pagina[Card], error) {
+	pagina, limite = web.Paginacao(pagina, limite)
 	return u.listar(ctx, consulta{
 		usuarioID: usuarioID,
 		ordem:     "antigos",
@@ -163,12 +165,12 @@ func (u *UseCases) FilaModeracao(ctx context.Context, usuarioID, pagina, limite 
 	}, pagina)
 }
 
-func (u *UseCases) listar(ctx context.Context, c consulta, pagina int) (*Pagina[Card], error) {
+func (u *UseCases) listar(ctx context.Context, c consulta, pagina int) (*web.Pagina[Card], error) {
 	cards, total, err := u.repo.Listar(ctx, c)
 	if err != nil {
 		return nil, interno("erro ao listar projetos", err)
 	}
-	return &Pagina[Card]{Itens: cards, Total: total, Pagina: pagina, Limite: c.limite}, nil
+	return &web.Pagina[Card]{Itens: cards, Total: total, Pagina: pagina, Limite: c.limite}, nil
 }
 
 func (u *UseCases) Detalhe(ctx context.Context, usuarioID, projetoID int) (*Detalhe, error) {
@@ -369,7 +371,7 @@ func (u *UseCases) Aprovar(ctx context.Context, moderadorID, projetoID int) erro
 			return nil
 		}
 		autorID := int(b.AutorID.Int64)
-		if _, err := u.repo.DarXP(ctx, tx, autorID, xpPublicacao, "projeto_publicado", projetoID, "Projeto publicado"); err != nil {
+		if _, err := xp.Dar(ctx, tx, autorID, xpPublicacao, xp.ProjetoPublicado, projetoID, "Projeto publicado"); err != nil {
 			return err
 		}
 		cats, err := u.repo.CategoriasDoProjeto(ctx, tx, projetoID)
@@ -460,7 +462,7 @@ func (u *UseCases) Concluir(ctx context.Context, usuarioID, projetoID int, fotoU
 			return apperror.Conflict("você já concluiu este projeto")
 		}
 
-		if resp.XPGanho, err = u.repo.DarXP(ctx, tx, usuarioID, b.XP, "projeto_concluido", projetoID, "Projeto concluído"); err != nil {
+		if resp.XPGanho, err = xp.Dar(ctx, tx, usuarioID, b.XP, xp.ProjetoConcluido, projetoID, "Projeto concluído"); err != nil {
 			return err
 		}
 
@@ -480,9 +482,11 @@ func (u *UseCases) Concluir(ctx context.Context, usuarioID, projetoID int, fotoU
 		return nil, repassar("erro ao concluir projeto", err)
 	}
 
-	if resp.XPTotal, resp.NivelID, resp.NivelTitulo, err = u.repo.XPUsuario(ctx, usuarioID); err != nil {
+	totais, err := xp.DoUsuario(ctx, u.repo.DB(), usuarioID)
+	if err != nil {
 		return nil, interno("erro ao buscar XP", err)
 	}
+	resp.Totais = *totais
 	return resp, nil
 }
 
@@ -529,7 +533,7 @@ func (u *UseCases) Avaliar(ctx context.Context, usuarioID, projetoID, nota int) 
 
 // ---------- comentários ----------
 
-func (u *UseCases) ListarComentarios(ctx context.Context, usuarioID, projetoID, pagina, limite int) (*Pagina[Comentario], error) {
+func (u *UseCases) ListarComentarios(ctx context.Context, usuarioID, projetoID, pagina, limite int) (*web.Pagina[Comentario], error) {
 	if _, _, err := u.baseVisivel(ctx, usuarioID, projetoID); err != nil {
 		return nil, err
 	}
@@ -538,7 +542,7 @@ func (u *UseCases) ListarComentarios(ctx context.Context, usuarioID, projetoID, 
 		return nil, interno("erro ao verificar permissão", err)
 	}
 
-	pagina, limite = paginacao(pagina, limite)
+	pagina, limite = web.Paginacao(pagina, limite)
 	rows, total, err := u.repo.ListarComentarios(ctx, projetoID, limite, (pagina-1)*limite)
 	if err != nil {
 		return nil, interno("erro ao listar comentários", err)
@@ -550,11 +554,11 @@ func (u *UseCases) ListarComentarios(ctx context.Context, usuarioID, projetoID, 
 			ID:         r.ID,
 			Conteudo:   r.Conteudo,
 			CriadoEm:   r.CriadoEm,
-			Autor:      Autor{ID: r.AutorID, Nome: r.AutorNome, FotoURL: strPtr(r.AutorFotoURL)},
+			Autor:      Autor{ID: r.AutorID, Nome: r.AutorNome, FotoURL: web.StrPtr(r.AutorFotoURL)},
 			PodeApagar: mod || r.AutorID == usuarioID,
 		})
 	}
-	return &Pagina[Comentario]{Itens: itens, Total: total, Pagina: pagina, Limite: limite}, nil
+	return &web.Pagina[Comentario]{Itens: itens, Total: total, Pagina: pagina, Limite: limite}, nil
 }
 
 func (u *UseCases) Comentar(ctx context.Context, usuarioID, projetoID int, conteudo string) (*Comentario, error) {
@@ -574,7 +578,7 @@ func (u *UseCases) Comentar(ctx context.Context, usuarioID, projetoID int, conte
 		return nil, interno("erro ao comentar", err)
 	}
 	return &Comentario{ID: r.ID, Conteudo: r.Conteudo, CriadoEm: r.CriadoEm,
-		Autor:      Autor{ID: usuarioID, Nome: r.AutorNome, FotoURL: strPtr(r.AutorFotoURL)},
+		Autor:      Autor{ID: usuarioID, Nome: r.AutorNome, FotoURL: web.StrPtr(r.AutorFotoURL)},
 		PodeApagar: true}, nil
 }
 

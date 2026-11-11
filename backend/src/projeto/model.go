@@ -6,6 +6,8 @@ import (
 	"time"
 
 	"ARIC/src/missao"
+	"ARIC/src/xp"
+	"ARIC/utils/web"
 )
 
 // Status possíveis (coluna projetos.status)
@@ -123,19 +125,10 @@ type Detalhe struct {
 	PodeEditar   bool       `json:"podeEditar"`
 }
 
-type Pagina[T any] struct {
-	Itens  []T `json:"itens"`
-	Total  int `json:"total"`
-	Pagina int `json:"pagina"`
-	Limite int `json:"limite"`
-}
-
 type ConclusaoResponse struct {
 	XPGanho           int                `json:"xpGanho"`
 	MissoesConcluidas []missao.Concluida `json:"missoesConcluidas"`
-	XPTotal           int                `json:"xpTotal"`
-	NivelID           *int64             `json:"nivelId"`
-	NivelTitulo       *string            `json:"nivelTitulo"`
+	xp.Totais                            // xpTotal, nivelId, nivelTitulo
 }
 
 type CurtidaResponse struct {
@@ -208,12 +201,12 @@ func (r cardRow) toCard() Card {
 		Titulo:          r.Titulo,
 		Subtitulo:       r.Subtitulo,
 		Status:          r.Status,
-		MotivoModeracao: strPtr(r.MotivoModeracao),
+		MotivoModeracao: web.StrPtr(r.MotivoModeracao),
 		XP:              r.XP,
 		TempoEstimado:   r.TempoEstimado,
 		ResiduosKg:      r.ResiduosKg,
 		Dificuldade:     Dificuldade{ID: r.DificuldadeID, Descricao: r.Dificuldade},
-		CapaURL:         strPtr(r.CapaURL),
+		CapaURL:         web.StrPtr(r.CapaURL),
 		Categorias:      json.RawMessage(r.Categorias),
 		Curtidas:        r.Curtidas,
 		Conclusoes:      r.Conclusoes,
@@ -235,8 +228,8 @@ func (r cardRow) toCard() Card {
 		c.Autor = &Autor{
 			ID:      int(r.AutorID.Int64),
 			Nome:    r.AutorNome.String,
-			FotoURL: strPtr(r.AutorFotoURL),
-			Bairro:  strPtr(r.AutorBairro),
+			FotoURL: web.StrPtr(r.AutorFotoURL),
+			Bairro:  web.StrPtr(r.AutorBairro),
 		}
 	}
 	return c
@@ -262,11 +255,4 @@ type comentarioRow struct {
 	AutorNome    string         `db:"autor_nome"`
 	AutorFotoURL sql.NullString `db:"autor_foto_url"`
 	Total        int            `db:"total"`
-}
-
-func strPtr(s sql.NullString) *string {
-	if !s.Valid {
-		return nil
-	}
-	return &s.String
 }

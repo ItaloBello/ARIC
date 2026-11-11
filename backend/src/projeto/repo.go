@@ -259,38 +259,6 @@ func (r *Repository) DestaqueAtual(ctx context.Context) (int, error) {
 	return id, err
 }
 
-// ---------- XP ----------
-
-// DarXP registra o evento e devolve quanto foi dado (0 se a recompensa já tinha sido dada).
-func (r *Repository) DarXP(ctx context.Context, tx *sqlx.Tx, usuarioID, quantidade int, origem string, referenciaID int, descricao string) (int, error) {
-	if quantidade == 0 {
-		return 0, nil
-	}
-	var dado int
-	err := tx.GetContext(ctx, &dado, qInserirEventoXP, usuarioID, quantidade, origem, referenciaID, descricao)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	return dado, err
-}
-
-func (r *Repository) XPUsuario(ctx context.Context, usuarioID int) (xpTotal int, nivelID *int64, nivelTitulo *string, err error) {
-	var row struct {
-		XPTotal     int            `db:"xp_total"`
-		NivelID     sql.NullInt64  `db:"nivel_id"`
-		NivelTitulo sql.NullString `db:"nivel_titulo"`
-	}
-	if err = r.db.GetContext(ctx, &row, qXPUsuario, usuarioID); err != nil {
-		return
-	}
-	xpTotal = row.XPTotal
-	if row.NivelID.Valid {
-		nivelID = &row.NivelID.Int64
-	}
-	nivelTitulo = strPtr(row.NivelTitulo)
-	return
-}
-
 // ---------- interações ----------
 
 // InserirConclusao devolve false se o usuário já tinha concluído.

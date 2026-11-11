@@ -220,6 +220,74 @@ O `GET /auth/me` devolve o `papel`, para o app saber se mostra a área de modera
 
 `autor` é `null` em projetos oficiais do ARIC. Listas vêm como `{"itens": [...], "total", "pagina", "limite"}`.
 
+## Fórum
+
+Todas as rotas exigem token e ficam em `/api/v1/forum`.
+
+### Regras
+
+- **Publicação imediata:** o fórum não passa por revisão. Moderadores podem apagar qualquer post ou
+  resposta.
+- **Tipos de post:** `duvida` ("Perguntar") ou `dica`. O tipo não muda depois de criado.
+- **Resolvido:** é uma dúvida com resposta aceita.
+  - Só o autor da dúvida aceita uma resposta, e não pode aceitar a própria.
+  - Ele pode trocar a resposta aceita ou desmarcar.
+- **XP:** quem teve a resposta aceita ganha **50 XP**, uma vez por resposta. Trocar ou desmarcar
+  depois não tira o XP.
+- **Missões:**
+  - criar uma dúvida avança as missões de "perguntar";
+  - responder o post de **outra pessoa** avança as de "responder" (responder o próprio post não
+    conta).
+- **Resposta aceita apagada:** a dúvida volta para "em aberto".
+- **Imagens:** cada post pode ter uma. Envie antes em `POST /forum/imagens` (multipart, campo
+  `imagem`) e use a URL devolvida.
+
+### Rotas
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET | `/forum/posts` | Lista. Query: `busca`, `categoria`, `tipo` (`duvida` ou `dica`), `situacao` (`abertas` ou `resolvidas`), `autor`, `ordem` (`recentes`, `votadas` ou `relevancia`), `pagina`, `limite` |
+| POST | `/forum/posts` | Cria: `{"tipo", "titulo", "conteudo", "imagemUrl", "categoriaId"}`. A resposta traz `missoesConcluidas` |
+| POST | `/forum/imagens` | Envia uma imagem |
+| GET | `/forum/posts/salvos` | Posts que salvei |
+| GET | `/forum/posts/:id` | Detalhe com o texto completo e `podeEditar`, `podeApagar` e `podeAceitar` |
+| PUT | `/forum/posts/:id` | Edita título, texto, imagem e categoria (só o autor) |
+| DELETE | `/forum/posts/:id` | Apaga (autor ou moderador) |
+| PUT / DELETE | `/forum/posts/:id/curtida` | Curte / descurte |
+| PUT / DELETE | `/forum/posts/:id/salvo` | Salva / tira dos salvos |
+| PUT | `/forum/posts/:id/resposta-aceita` | `{"respostaId": 3}`: marca como resolvida |
+| DELETE | `/forum/posts/:id/resposta-aceita` | Volta para "em aberto" |
+| GET | `/forum/posts/:id/respostas` | Respostas: a aceita primeiro, depois as mais curtidas e depois as mais antigas |
+| POST | `/forum/posts/:id/respostas` | `{"conteudo": "..."}`. A resposta traz `missoesConcluidas` |
+| PUT | `/forum/respostas/:id` | Edita (só o autor) |
+| DELETE | `/forum/respostas/:id` | Apaga (autor ou moderador) |
+| PUT / DELETE | `/forum/respostas/:id/curtida` | Curte / descurte |
+
+**Abas da tela:**
+
+| Aba | Chamada |
+|-----|---------|
+| Mais votadas | `?ordem=votadas` |
+| Recentes | `?ordem=recentes` |
+| Dúvidas abertas | `?situacao=abertas` |
+| Dicas rápidas | `?tipo=dica` |
+
+Textos: título de 5 a 200 caracteres; post e resposta com até 5000.
+
+### Card de post
+
+```json
+{
+  "id": 1, "tipo": "duvida", "titulo": "O que fazer com caixas de ovos?",
+  "resumo": "primeiros 200 caracteres...", "imagemUrl": null,
+  "resolvido": true, "respostaAceitaId": 7,
+  "autor": { "id": 3, "nome": "Ana", "fotoUrl": null, "bairro": "Centro" },
+  "categoria": { "id": 2, "nome": "Papelão", "cor": "#B07A4A" },
+  "curtidas": 32, "respostas": 12, "curtido": false, "salvo": false,
+  "criadoEm": "...", "atualizadoEm": "..."
+}
+```
+
 ## Usando o login em novas rotas
 
 ```go

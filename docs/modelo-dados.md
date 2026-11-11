@@ -116,9 +116,15 @@ erDiagram
 
 ### Fórum
 
+- **Sem revisão prévia:** posts e respostas aparecem na hora. Moderadores podem apagar.
 - **A resposta aceita precisa ser do próprio post:** isso é garantido por FK composta.
 - **Dica não tem resposta aceita** (CHECK).
-- **Apague com soft delete** (`deletado_em`).
+- **Aceite:** só o autor da dúvida aceita, e não pode aceitar a própria resposta. Quem respondeu
+  ganha 50 XP (`forum_resposta_aceita`), uma vez por resposta.
+- **Missões:** dúvida nova avança "perguntar_forum". Responder o post de outra pessoa avança
+  "responder_forum".
+- **Apague com soft delete** (`deletado_em`). Apagar a resposta aceita volta a dúvida para "em
+  aberto".
 
 ### Projetos
 

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"ARIC/src/forum"
 	"ARIC/src/login"
 	"ARIC/src/middleware"
 	"ARIC/src/projeto"
@@ -30,4 +31,7 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB, tokens *token.Manager) {
 	projetoRepo := projeto.NewRepository(db)
 	projetoUC := projeto.NewUseCases(projetoRepo)
 	projeto.SetupRoutes(v1, projeto.NewController(projetoUC), projetoRepo, auth)
+
+	forumUC := forum.NewUseCases(forum.NewRepository(db))
+	forum.SetupRoutes(v1, forum.NewController(forumUC), auth)
 }

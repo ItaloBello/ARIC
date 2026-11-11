@@ -195,18 +195,6 @@ VALUES ($1, $2, NULLIF($3, ''))
 ON CONFLICT (projeto_id, usuario_id) DO NOTHING
 RETURNING data_conclusao`
 
-// Não dá XP duas vezes pela mesma coisa: se já existe, não insere e não retorna linha.
-const qInserirEventoXP = `
-INSERT INTO aric.eventos_xp (usuario_id, quantidade, origem, referencia_id, descricao)
-VALUES ($1, $2, $3, $4, $5)
-ON CONFLICT (usuario_id, origem, referencia_id) DO NOTHING
-RETURNING quantidade`
-
-const qXPUsuario = `
-SELECT u.xp_total, u.nivel_id, n.titulo AS nivel_titulo
-FROM aric.usuarios u LEFT JOIN aric.niveis n ON n.id = u.nivel_id
-WHERE u.id = $1`
-
 const (
 	qCurtir    = `INSERT INTO aric.projetos_curtidas (projeto_id, usuario_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 	qDescurtir = `DELETE FROM aric.projetos_curtidas WHERE projeto_id = $1 AND usuario_id = $2`
