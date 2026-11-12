@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
@@ -139,8 +140,9 @@ SET cep = $2, bairro_id = $3, logradouro = $4, numero_endereco = $5,
     complemento_endereco = $6, atualizado_em = now()
 WHERE id = $1 AND deletado_em IS NULL`
 
+// Troca a senha e, no mesmo comando, invalida os tokens emitidos antes de $3.
 const qAtualizarSenha = `
-UPDATE aric.usuarios SET senha_hash = $2, atualizado_em = now()
+UPDATE aric.usuarios SET senha_hash = $2, sessoes_validas_desde = $3, atualizado_em = now()
 WHERE id = $1 AND deletado_em IS NULL`
 
 func (r *LoginRepository) exec1(ctx context.Context, query string, args ...any) error {
@@ -168,6 +170,6 @@ func (r *LoginRepository) AtualizarEndereco(ctx context.Context, id int, cep str
 	return r.exec1(ctx, qAtualizarEndereco, id, cep, bairroID, logradouro, numero, complemento)
 }
 
-func (r *LoginRepository) AtualizarSenha(ctx context.Context, id int, hash string) error {
-	return r.exec1(ctx, qAtualizarSenha, id, hash)
+func (r *LoginRepository) AtualizarSenha(ctx context.Context, id int, hash string, sessoesValidasDesde time.Time) error {
+	return r.exec1(ctx, qAtualizarSenha, id, hash, sessoesValidasDesde)
 }

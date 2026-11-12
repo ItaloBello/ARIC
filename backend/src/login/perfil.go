@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime/multipart"
 	"strings"
+	"time"
 
 	"ARIC/src/usuario"
 	"ARIC/utils/apperror"
@@ -104,33 +105,40 @@ func (u *LoginUseCases) AtualizarEndereco(ctx context.Context, id int, req Ender
 }
 
 // TrocarSenha exige a senha atual e aplica as mesmas regras do cadastro.
-func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaRequest) error {
+// Derruba as sessões dos outros aparelhos e devolve um token novo para este.
+func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaRequest) (*AuthResponse, error) {
 	if req.SenhaAtual == "" {
-		return apperror.BadRequest("informe a senha atual")
+		return nil, apperror.BadRequest("informe a senha atual")
 	}
 	if err := validarSenhaForte(req.NovaSenha, req.ConfirmarSenha); err != nil {
-		return apperror.BadRequest(err.Error())
+		return nil, apperror.BadRequest(err.Error())
 	}
 
 	user, err := u.repo.GetUsuarioByID(ctx, id)
 	if err != nil {
-		return erroUsuario("erro ao buscar usuário", err)
+		return nil, erroUsuario("erro ao buscar usuário", err)
 	}
 	if !user.VerificarSenha(req.SenhaAtual) {
 		// 400 e não 401: o app não deve entender isso como sessão expirada
-		return apperror.BadRequest("senha atual incorreta")
+		return nil, apperror.BadRequest("senha atual incorreta")
 	}
 	if user.VerificarSenha(req.NovaSenha) {
-		return apperror.BadRequest("a nova senha deve ser diferente da atual")
+		return nil, apperror.BadRequest("a nova senha deve ser diferente da atual")
 	}
 
 	if err := user.DefinirSenha(req.NovaSenha); err != nil {
-		return interno("erro ao gerar hash da senha", err)
+		return nil, interno("erro ao gerar hash da senha", err)
 	}
-	if err := u.repo.AtualizarSenha(ctx, id, user.SenhaHash); err != nil {
-		return erroUsuario("erro ao trocar senha", err)
+	// tokens emitidos antes deste instante param de valer; o novo usa exatamente este instante
+	agora := time.Now().Truncate(time.Second)
+	if err := u.repo.AtualizarSenha(ctx, id, user.SenhaHash, agora); err != nil {
+		return nil, erroUsuario("erro ao trocar senha", err)
 	}
-	return nil
+	tok, expira, err := u.tokens.GerarEm(id, agora)
+	if err != nil {
+		return nil, interno("erro ao gerar token", err)
+	}
+	return &AuthResponse{Token: tok, ExpiraEm: expira, Usuario: user.ToResponse()}, nil
 }
 
 // ---------- helpers ----------

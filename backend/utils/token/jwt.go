@@ -43,7 +43,13 @@ func NewManagerFromEnv() (*Manager, error) {
 }
 
 func (m *Manager) Gerar(usuarioID int) (string, time.Time, error) {
-	agora := time.Now()
+	return m.GerarEm(usuarioID, time.Now())
+}
+
+// GerarEm emite o token com o instante de emissão informado. Usado na troca de senha:
+// o mesmo instante vai para usuarios.sessoes_validas_desde, então o token novo vale
+// e os anteriores não.
+func (m *Manager) GerarEm(usuarioID int, agora time.Time) (string, time.Time, error) {
 	expira := agora.Add(m.expiracao)
 
 	claims := Claims{

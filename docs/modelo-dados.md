@@ -1,7 +1,7 @@
 # Modelo de dados do ARIC
 
 Schema `aric` no PostgreSQL. O banco nasce de `script.sql` + inserts + `003_schema_completo.sql`
-+ `004_projetos_moderacao.sql` + `005_missoes_evidencias.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
++ `004_projetos_moderacao.sql` + `005_missoes_evidencias.sql` + `006_sessoes.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
 precisa seguir.
 
 ## Visão geral
@@ -155,6 +155,20 @@ erDiagram
     progresso da semana em que a foto foi enviada.
 - **Ao atingir a meta:** preencha `concluida_em` e insira o evento
   `missao_concluida` com `referencia_id = usuarios_missoes.id`.
+
+### Contas e sessões
+
+- **Excluir conta não apaga a linha de `usuarios`: ela é anonimizada.**
+  - Os dados pessoais saem: nome vira "Usuário removido", o e-mail vira
+    `removido-<id>@aric.invalid`, e senha, foto, bio e endereço são apagados.
+  - `deletado_em` é preenchido.
+  - A linha fica para não quebrar o histórico (XP, ligas, conclusões).
+- **Todas as consultas de pessoas filtram `deletado_em IS NULL`**: login, perfil, ranking e
+  fechamento de liga.
+- **O conteúdo publicado** fica com autor "Usuário removido" ou é apagado, conforme o usuário
+  escolher na exclusão.
+- **`sessoes_validas_desde`:** tokens emitidos antes desse instante são recusados. A troca de
+  senha grava aqui o instante do token novo, e a exclusão grava `now()`.
 
 ## Consultas prontas
 

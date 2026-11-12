@@ -23,10 +23,10 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB, tokens *token.Manager) {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	auth := middleware.Auth(tokens)
+	loginRepo := login.NewLoginRepository(db)
+	auth := middleware.Auth(tokens, loginRepo.SessaoValida)
 	cep := viacep.NewClient(os.Getenv("VIACEP_URL"))
 
-	loginRepo := login.NewLoginRepository(db)
 	loginUC := login.NewLoginUseCases(loginRepo, cep, tokens)
 	login.SetupLoginRoutes(v1, login.NewLoginController(loginUC), auth)
 

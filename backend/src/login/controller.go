@@ -149,6 +149,21 @@ func (ct *LoginController) TrocarSenha(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
 		return
 	}
-	err := ct.uc.TrocarSenha(c.Request.Context(), id, req)
+	resp, err := ct.uc.TrocarSenha(c.Request.Context(), id, req)
+	web.Responder(c, http.StatusOK, resp, err)
+}
+
+// ExcluirConta: {"senha": "...", "apagarConteudo": false}
+func (ct *LoginController) ExcluirConta(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	var req ExcluirContaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "informe sua senha para confirmar"})
+		return
+	}
+	err := ct.uc.ExcluirConta(c.Request.Context(), id, req)
 	web.Responder(c, http.StatusNoContent, nil, err)
 }
