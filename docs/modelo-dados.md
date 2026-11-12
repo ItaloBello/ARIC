@@ -1,7 +1,8 @@
 # Modelo de dados do ARIC
 
 Schema `aric` no PostgreSQL. O banco nasce de `script.sql` + inserts + `003_schema_completo.sql`
-+ `004_projetos_moderacao.sql` + `005_missoes_evidencias.sql` + `006_sessoes.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
++ `004_projetos_moderacao.sql` + `005_missoes_evidencias.sql` + `006_sessoes.sql`
++ `007_tentativas_acesso.sql` + `008_denuncias.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
 precisa seguir.
 
 ## Visão geral
@@ -169,6 +170,19 @@ erDiagram
   escolher na exclusão.
 - **`sessoes_validas_desde`:** tokens emitidos antes desse instante são recusados. A troca de
   senha grava aqui o instante do token novo, e a exclusão grava `now()`.
+
+### Denúncias
+
+- **`aric.denuncias`:** guarda `alvo_tipo` + `alvo_id`, sem FK, porque o alvo pode estar em
+  quatro tabelas diferentes. Cada pessoa denuncia o mesmo conteúdo uma vez (UNIQUE).
+- **A fila agrupa por conteúdo.** Resolver decide todas as denúncias pendentes daquele conteúdo:
+  `procedente` remove o conteúdo, `improcedente` o mantém.
+
+### Tentativas de acesso
+
+- **`aric.tentativas_acesso`:** registra cada login, confirmação de senha e cadastro (e-mail, IP,
+  sucesso). O backend conta as falhas recentes para bloquear força bruta.
+- **Limpeza:** os registros com mais de 30 dias são apagados de hora em hora.
 
 ## Consultas prontas
 

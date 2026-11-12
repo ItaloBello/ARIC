@@ -17,9 +17,10 @@ Backend em Go (Gin) + PostgreSQL (schema `aric`).
    - `docs/migrations/005_missoes_evidencias.sql`
    - `docs/migrations/006_sessoes.sql`
    - `docs/migrations/007_tentativas_acesso.sql`
+   - `docs/migrations/008_denuncias.sql`
 
-   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql` e depois do 003 ao 007.
-   Do 003 ao 007, todos podem ser rodados mais de uma vez sem erro.
+   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql` e depois do 003 ao 008.
+   Do 003 ao 008, todos podem ser rodados mais de uma vez sem erro.
 
    O modelo de dados, as regras de XP/ligas/missões e as consultas de cada tela estão em
    [`docs/modelo-dados.md`](docs/modelo-dados.md).
@@ -481,6 +482,54 @@ Para usar o cron do servidor em vez disso, defina `LIGAS_JOB=off` e agende:
 ```
 
 Esse horário vale se o servidor estiver no fuso de São Paulo.
+
+## Denúncias
+
+### Denunciar (qualquer usuário)
+
+`POST /denuncias`
+
+```json
+{ "alvoTipo": "forum_post", "alvoId": 12, "motivo": "perigoso", "descricao": "mistura produtos tóxicos" }
+```
+
+| Campo | Valores |
+|-------|---------|
+| `alvoTipo` | `projeto`, `projeto_comentario`, `forum_post` ou `forum_resposta` |
+| `motivo` | `spam`, `ofensivo`, `perigoso`, `falso` ou `outro` |
+| `descricao` | Opcional, até 500 caracteres. Obrigatória quando o motivo é `outro` |
+
+| Resposta | Quando |
+|----------|--------|
+| `201` | Denúncia registrada |
+| `400` | Denunciar o próprio conteúdo |
+| `404` | Conteúdo inexistente ou que já saiu do ar |
+| `409` | Já denunciou este conteúdo (cada pessoa denuncia o mesmo item uma vez) |
+| `429` | Passou de 30 denúncias em 24h |
+
+### Moderação (moderador ou admin)
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET | `/moderacao/denuncias` | Fila **agrupada por conteúdo**: os mais denunciados primeiro e, entre eles, os mais antigos |
+| POST | `/moderacao/denuncias/resolver` | `{"alvoTipo", "alvoId", "acao": "remover" ou "manter", "motivo"}` → `204` |
+
+**Cada item da fila traz:**
+- tipo e id do conteúdo, e `paiId` (o projeto do comentário ou o post da resposta), para o app
+  abrir o conteúdo;
+- título, um trecho de 300 caracteres e o autor;
+- quantas denúncias recebeu, os motivos e até 3 descrições;
+- `noAr: false` quando o autor já apagou o conteúdo.
+
+**Resolver decide todas as denúncias do conteúdo de uma vez:**
+- **`remover`:** o conteúdo sai do ar e as denúncias ficam como procedentes.
+  - Projeto vira `oculto`, e o autor vê o `motivo` em "meus projetos". Sem motivo, fica
+    "Removido pela moderação após denúncias".
+  - Comentário, post e resposta são apagados. Resposta aceita apagada volta a dúvida para "em
+    aberto".
+- **`manter`:** o conteúdo continua e as denúncias ficam como improcedentes.
+
+Um moderador não resolve denúncias sobre o próprio conteúdo.
 
 ## Usando o login em novas rotas
 
