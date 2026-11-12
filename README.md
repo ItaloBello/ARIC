@@ -14,9 +14,10 @@ Backend em Go (Gin) + PostgreSQL (schema `aric`).
    - `docs/migrations/insert_categorias.sql`
    - `docs/migrations/003_schema_completo.sql`
    - `docs/migrations/004_projetos_moderacao.sql`
+   - `docs/migrations/005_missoes_evidencias.sql`
 
-   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql`, depois o 003 e o 004.
-   O 003 e o 004 podem ser rodados mais de uma vez sem erro.
+   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql` e depois do 003 ao 005.
+   Do 003 ao 005, todos podem ser rodados mais de uma vez sem erro.
 
    O modelo de dados, as regras de XP/ligas/missões e as consultas de cada tela estão em
    [`docs/modelo-dados.md`](docs/modelo-dados.md).
@@ -287,6 +288,103 @@ Textos: título de 5 a 200 caracteres; post e resposta com até 5000.
   "criadoEm": "...", "atualizadoEm": "..."
 }
 ```
+
+## Gamificação
+
+Todas as rotas exigem token.
+
+### Rotas
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET | `/gamificacao/perfil` | Meu perfil: nível, barra até o próximo, XP total, sequência, liga com posição e impacto |
+| GET | `/usuarios/:id/perfil` | Perfil público de outra pessoa (sem e-mail e endereço) |
+| GET | `/gamificacao/niveis` | Os 10 níveis com o XP mínimo de cada |
+| GET | `/gamificacao/xp` | Meu histórico de XP (paginado) |
+| GET | `/gamificacao/ligas` | As ligas, da mais baixa para a mais alta |
+| GET | `/gamificacao/ranking` | Tela Comunidade: liga, top 50, minha posição, fim da semana e resultado da semana passada |
+| GET | `/gamificacao/missoes` | Missões da semana com progresso |
+| POST | `/gamificacao/missoes/imagens` | Envia a foto de uma missão (multipart, campo `imagem`) |
+| POST | `/gamificacao/missoes/:id/evidencias` | `{"fotoUrl", "quantidade"}`: manda a foto para análise |
+| GET | `/gamificacao/evidencias` | Minhas fotos enviadas, com status e motivo da rejeição |
+
+**Moderação** (só moderador ou admin):
+
+| Método | Rota | O que faz |
+|--------|------|-----------|
+| GET | `/moderacao/evidencias` | Fotos aguardando análise, mais antigas primeiro |
+| POST | `/moderacao/evidencias/:id/aprovar` | Soma no progresso. Se bater a meta, conclui a missão e dá o XP |
+| POST | `/moderacao/evidencias/:id/rejeitar` | `{"motivo": "..."}`. O usuário vê o motivo |
+
+### Perfil
+
+```json
+{
+  "id": 1, "nome": "Ana", "fotoUrl": null, "bio": null,
+  "bairro": "Centro", "cidade": "Sorocaba", "uf": "SP", "membroDesde": "...",
+  "xpTotal": 850,
+  "nivel": { "numero": 4, "titulo": "Coletor Consciente", "minimoXp": 600 },
+  "proximoNivel": { "numero": 5, "titulo": "Reciclador", "minimoXp": 1000 },
+  "xpParaProximo": 150, "progressoNivel": 62,
+  "sequenciaDias": 18,
+  "liga": { "id": 2, "nome": "Liga Broto", "ordem": 2, "icone": null, "posicao": 14, "xpSemana": 184 },
+  "impacto": { "residuosKg": 12.4, "projetosConcluidos": 9, "projetosPublicados": 2, "vidasInspiradas": 12 }
+}
+```
+
+- **Topo das telas:** use `xpTotal` (são os EcoPontos).
+- **`sequenciaDias`:** já vem zerada se o usuário pulou um dia.
+- **`proximoNivel`:** é `null` no nível máximo.
+- **`vidasInspiradas`:** quantas pessoas diferentes fizeram projetos publicados por este usuário.
+- **Perfil da tela:** troque "#14 no Bairro" por `liga.posicao` + `liga.nome`.
+
+### Ranking (tela Comunidade)
+
+- **Liga:** é a do usuário, com o XP desde segunda.
+- **Linhas:**
+  - `zona`: `sobe`, `desce` ou `mantem`, se a semana fechasse agora. Serve para desenhar as linhas
+    de corte.
+  - `tendencia`: posições ganhas (+) ou perdidas (-) desde ontem.
+- **Liga inteira:**
+  - `primeira: true`: ninguém desce.
+  - `ultima: true`: ninguém sobe.
+  - `fimSemana`: o contador "termina em 2d 4h".
+- **`minhaPosicao`:** vem sempre, mesmo fora do top 50.
+- **`ultimaSemana`:** traz o resultado da semana passada (`subiu`, `desceu` ou `manteve`, com a liga
+  anterior e a nova), para mostrar "Você subiu para a Liga Broto!". É `null` antes da primeira
+  semana fechada.
+
+### Missões
+
+- **Missões automáticas** (`enviaFoto: false`): avançam sozinhas quando o usuário conclui um projeto,
+  tem um projeto aprovado, pergunta no fórum ou responde no fórum. Isso acontece nas rotas desses
+  módulos, que devolvem `missoesConcluidas` quando alguma termina.
+- **Missões com foto** (`enviaFoto: true`), por exemplo "entregue 10 garrafas":
+  1. O app envia a foto em `/gamificacao/missoes/imagens`.
+  2. O app chama `/gamificacao/missoes/:id/evidencias` com a quantidade.
+  3. Um moderador aprova; a quantidade soma no progresso e, ao bater a meta, a missão conclui e dá
+     o XP.
+- **Limites das fotos:**
+  - até 3 fotos em análise por missão;
+  - quantidade de 1 até a meta;
+  - não aceita foto de missão já concluída na semana.
+- **Aprovação depois da virada:** uma foto aprovada na semana seguinte conta para a semana em que
+  foi enviada.
+- **Um moderador não analisa a própria foto.**
+
+### Fechamento semanal das ligas
+
+A API fecha a semana sozinha: ao subir e depois a cada hora, ela verifica se a semana anterior já
+foi fechada e, se não foi, chama `aric.fechar_semana_ligas`. Se o servidor estiver fora do ar na
+virada de segunda, o fechamento acontece assim que ele voltar.
+
+Para usar o cron do servidor em vez disso, defina `LIGAS_JOB=off` e agende:
+
+```
+5 0 * * 1  psql -d aric -c "SELECT aric.fechar_semana_ligas(aric.inicio_semana(now()) - 7);"
+```
+
+Esse horário vale se o servidor estiver no fuso de São Paulo.
 
 ## Usando o login em novas rotas
 

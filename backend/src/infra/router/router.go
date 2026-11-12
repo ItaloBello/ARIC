@@ -2,11 +2,13 @@ package router
 
 import (
 	"ARIC/src/forum"
+	"ARIC/src/gamificacao"
 	"ARIC/src/login"
 	"ARIC/src/middleware"
 	"ARIC/src/projeto"
 	"ARIC/utils/token"
 	"ARIC/utils/viacep"
+	"context"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -34,4 +36,12 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB, tokens *token.Manager) {
 
 	forumUC := forum.NewUseCases(forum.NewRepository(db))
 	forum.SetupRoutes(v1, forum.NewController(forumUC), auth)
+
+	gamRepo := gamificacao.NewRepository(db)
+	gamificacao.SetupRoutes(v1, gamificacao.NewController(gamificacao.NewUseCases(gamRepo)), auth, projetoRepo.Papel)
+
+	// Fechamento semanal das ligas. Use LIGAS_JOB=off se preferir rodar pelo cron do servidor.
+	if os.Getenv("LIGAS_JOB") != "off" {
+		gamificacao.IniciarFechamentoLigas(context.Background(), gamRepo)
+	}
 }

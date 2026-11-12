@@ -1,7 +1,7 @@
 # Modelo de dados do ARIC
 
 Schema `aric` no PostgreSQL. O banco nasce de `script.sql` + inserts + `003_schema_completo.sql`
-+ `004_projetos_moderacao.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
++ `004_projetos_moderacao.sql` + `005_missoes_evidencias.sql` (veja a ordem no README). Este documento explica o que cada parte faz e as regras que o backend
 precisa seguir.
 
 ## Visão geral
@@ -65,7 +65,7 @@ erDiagram
 | Missões | Missões da semana com progresso | `missoes`, `usuarios_missoes`, `missoes_evidencias` |
 | Perfil | Posição (no lugar de "#14 no Bairro") | posição do usuário em `aric.ranking_liga(...)`, ex.: "#14 na Liga Broto" |
 | Perfil | Sequência ativa | `usuarios.sequencia_dias` + `usuarios.ultima_atividade_em` |
-| Perfil | Resíduos reutilizados, vidas inspiradas | soma de `residuos_kg` das conclusões do usuário; curtidas recebidas nos projetos dele |
+| Perfil | Resíduos reutilizados, vidas inspiradas | soma de `residuos_kg` das conclusões do usuário; pessoas diferentes que concluíram projetos dele |
 
 ## Decisões de produto
 
@@ -102,7 +102,8 @@ erDiagram
 ### Ligas
 
 - **Usuário novo entra na liga mais baixa** automaticamente (trigger).
-- **Toda segunda, logo após 00:00, rode:**
+- **A API fecha a semana sozinha** (verifica de hora em hora; `LIGAS_JOB=off` desliga). Pelo cron,
+  o comando é:
   ```sql
   SELECT aric.fechar_semana_ligas(aric.inicio_semana(now()) - 7);
   ```
@@ -150,7 +151,8 @@ erDiagram
     incrementa o progresso ao tratar essas ações, filtrando por `categoria_id` quando a missão tem
     categoria.
   - `registro_manual`: o usuário envia foto e quantidade em `missoes_evidencias`, e um moderador
-    (`usuarios.papel`) aprova.
+    (`usuarios.papel`) aprova ou rejeita com `motivo_rejeicao`. A quantidade aprovada soma no
+    progresso da semana em que a foto foi enviada.
 - **Ao atingir a meta:** preencha `concluida_em` e insira o evento
   `missao_concluida` com `referencia_id = usuarios_missoes.id`.
 
