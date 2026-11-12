@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"ARIC/src/acesso"
 	"ARIC/src/usuario"
 	"ARIC/utils/apperror"
 	"ARIC/utils/uploader"
@@ -106,7 +107,7 @@ func (u *LoginUseCases) AtualizarEndereco(ctx context.Context, id int, req Ender
 
 // TrocarSenha exige a senha atual e aplica as mesmas regras do cadastro.
 // Derruba as sessões dos outros aparelhos e devolve um token novo para este.
-func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaRequest) (*AuthResponse, error) {
+func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaRequest, ip string) (*AuthResponse, error) {
 	if req.SenhaAtual == "" {
 		return nil, apperror.BadRequest("informe a senha atual")
 	}
@@ -118,9 +119,8 @@ func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaReques
 	if err != nil {
 		return nil, erroUsuario("erro ao buscar usuário", err)
 	}
-	if !user.VerificarSenha(req.SenhaAtual) {
-		// 400 e não 401: o app não deve entender isso como sessão expirada
-		return nil, apperror.BadRequest("senha atual incorreta")
+	if err := u.confirmarSenha(ctx, user, req.SenhaAtual, ip); err != nil {
+		return nil, err
 	}
 	if user.VerificarSenha(req.NovaSenha) {
 		return nil, apperror.BadRequest("a nova senha deve ser diferente da atual")
@@ -139,6 +139,21 @@ func (u *LoginUseCases) TrocarSenha(ctx context.Context, id int, req SenhaReques
 		return nil, interno("erro ao gerar token", err)
 	}
 	return &AuthResponse{Token: tok, ExpiraEm: expira, Usuario: user.ToResponse()}, nil
+}
+
+// confirmarSenha confere a senha do próprio usuário (trocar senha, excluir conta)
+// respeitando o mesmo limite de tentativas do login.
+// Erro devolve 400, e não 401, para o app não entender como sessão expirada.
+func (u *LoginUseCases) confirmarSenha(ctx context.Context, user *usuario.Usuario, senha, ip string) error {
+	if err := u.limitador.VerificarSenha(ctx, user.Email, ip); err != nil {
+		return err
+	}
+	if !user.VerificarSenha(senha) {
+		u.limitador.RegistrarSenha(ctx, acesso.Senha, user.Email, ip, false)
+		return apperror.BadRequest("senha atual incorreta")
+	}
+	u.limitador.RegistrarSenha(ctx, acesso.Senha, user.Email, ip, true)
+	return nil
 }
 
 // ---------- helpers ----------

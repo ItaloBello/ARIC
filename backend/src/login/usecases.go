@@ -1,6 +1,7 @@
 package login
 
 import (
+	"ARIC/src/acesso"
 	"ARIC/src/bairro"
 	"ARIC/src/usuario"
 	"ARIC/utils/apperror"
@@ -28,18 +29,22 @@ var configFotoUsuario = uploader.UploadConfig{
 var hashFalso, _ = hashsenha.Encriptar("senha-falsa-para-tempo-constante")
 
 type LoginUseCases struct {
-	repo   *LoginRepository
-	cep    *viacep.Client
-	tokens *token.Manager
+	repo      *LoginRepository
+	cep       *viacep.Client
+	tokens    *token.Manager
+	limitador *acesso.Limitador
 }
 
-func NewLoginUseCases(repo *LoginRepository, cep *viacep.Client, tokens *token.Manager) *LoginUseCases {
-	return &LoginUseCases{repo: repo, cep: cep, tokens: tokens}
+func NewLoginUseCases(repo *LoginRepository, cep *viacep.Client, tokens *token.Manager, limitador *acesso.Limitador) *LoginUseCases {
+	return &LoginUseCases{repo: repo, cep: cep, tokens: tokens, limitador: limitador}
 }
 
 // Registro valida tudo, só então salva a foto (se houver) e cria o usuário.
 // Devolve o usuário já autenticado.
-func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipart.FileHeader) (*AuthResponse, error) {
+func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipart.FileHeader, ip string) (*AuthResponse, error) {
+	if err := u.limitador.VerificarCadastro(ctx, ip); err != nil {
+		return nil, err
+	}
 	c.Normalizar()
 	if err := c.Validar(); err != nil {
 		return nil, apperror.BadRequest(err.Error())
@@ -100,6 +105,7 @@ func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipar
 		return nil, interno("erro ao criar usuário", err)
 	}
 
+	u.limitador.RegistrarCadastro(ctx, criado.Email, ip)
 	return u.autenticar(criado)
 }
 
@@ -139,15 +145,21 @@ func (u *LoginUseCases) resolverEndereco(ctx context.Context, cep, bairroInforma
 	return bairroID, logradouro, nil
 }
 
-func (u *LoginUseCases) Login(ctx context.Context, l Login) (*AuthResponse, error) {
+// Login confere o limite de tentativas antes da senha (o bloqueio vale mesmo para
+// e-mail que não existe, para não revelar quais estão cadastrados).
+func (u *LoginUseCases) Login(ctx context.Context, l Login, ip string) (*AuthResponse, error) {
 	email := strings.ToLower(strings.TrimSpace(l.Email))
 	if email == "" || l.Senha == "" {
 		return nil, apperror.BadRequest("informe e-mail e senha")
+	}
+	if err := u.limitador.VerificarSenha(ctx, email, ip); err != nil {
+		return nil, err
 	}
 
 	user, err := u.repo.GetUsuarioByEmail(ctx, email)
 	if errors.Is(err, sql.ErrNoRows) {
 		_ = hashsenha.CompararSenha(hashFalso, l.Senha)
+		u.limitador.RegistrarSenha(ctx, acesso.Login, email, ip, false)
 		return nil, apperror.Unauthorized("e-mail ou senha inválidos")
 	}
 	if err != nil {
@@ -155,9 +167,11 @@ func (u *LoginUseCases) Login(ctx context.Context, l Login) (*AuthResponse, erro
 	}
 
 	if !user.VerificarSenha(l.Senha) {
+		u.limitador.RegistrarSenha(ctx, acesso.Login, email, ip, false)
 		return nil, apperror.Unauthorized("e-mail ou senha inválidos")
 	}
 
+	u.limitador.RegistrarSenha(ctx, acesso.Login, email, ip, true)
 	return u.autenticar(user)
 }
 

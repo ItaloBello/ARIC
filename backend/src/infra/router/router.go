@@ -1,6 +1,7 @@
 package router
 
 import (
+	"ARIC/src/acesso"
 	"ARIC/src/forum"
 	"ARIC/src/gamificacao"
 	"ARIC/src/login"
@@ -27,7 +28,9 @@ func SetupRoutes(r *gin.Engine, db *sqlx.DB, tokens *token.Manager) {
 	auth := middleware.Auth(tokens, loginRepo.SessaoValida)
 	cep := viacep.NewClient(os.Getenv("VIACEP_URL"))
 
-	loginUC := login.NewLoginUseCases(loginRepo, cep, tokens)
+	limitador := acesso.NewLimitador(db)
+	limitador.IniciarLimpeza(context.Background())
+	loginUC := login.NewLoginUseCases(loginRepo, cep, tokens, limitador)
 	login.SetupLoginRoutes(v1, login.NewLoginController(loginUC), auth)
 
 	projetoRepo := projeto.NewRepository(db)

@@ -117,7 +117,7 @@ WHERE id = $1 AND deletado_em IS NULL`
 
 // ExcluirConta confirma a senha, anonimiza a conta e (se pedido) apaga o conteúdo publicado.
 // Depois disso todos os tokens do usuário param de valer na hora.
-func (u *LoginUseCases) ExcluirConta(ctx context.Context, id int, req ExcluirContaRequest) error {
+func (u *LoginUseCases) ExcluirConta(ctx context.Context, id int, req ExcluirContaRequest, ip string) error {
 	if req.Senha == "" {
 		return apperror.BadRequest("informe sua senha para confirmar")
 	}
@@ -125,8 +125,12 @@ func (u *LoginUseCases) ExcluirConta(ctx context.Context, id int, req ExcluirCon
 	if err != nil {
 		return erroUsuario("erro ao buscar usuário", err)
 	}
-	if !user.VerificarSenha(req.Senha) {
-		return apperror.BadRequest("senha incorreta")
+	if err := u.confirmarSenha(ctx, user, req.Senha, ip); err != nil {
+		var appErr *apperror.AppError
+		if errors.As(err, &appErr) && appErr.StatusCode == 400 {
+			return apperror.BadRequest("senha incorreta")
+		}
+		return err
 	}
 
 	var arquivos []string

@@ -42,7 +42,7 @@ func (ct *LoginController) Registro(c *gin.Context) {
 		}
 	}
 
-	resp, err := ct.uc.Registro(c.Request.Context(), request, foto)
+	resp, err := ct.uc.Registro(c.Request.Context(), request, foto, c.ClientIP())
 	if err != nil {
 		responderErro(c, err)
 		return
@@ -57,7 +57,7 @@ func (ct *LoginController) Login(c *gin.Context) {
 		return
 	}
 
-	resp, err := ct.uc.Login(c.Request.Context(), request)
+	resp, err := ct.uc.Login(c.Request.Context(), request, c.ClientIP())
 	if err != nil {
 		responderErro(c, err)
 		return
@@ -149,7 +149,7 @@ func (ct *LoginController) TrocarSenha(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
 		return
 	}
-	resp, err := ct.uc.TrocarSenha(c.Request.Context(), id, req)
+	resp, err := ct.uc.TrocarSenha(c.Request.Context(), id, req, c.ClientIP())
 	web.Responder(c, http.StatusOK, resp, err)
 }
 
@@ -164,6 +164,6 @@ func (ct *LoginController) ExcluirConta(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "informe sua senha para confirmar"})
 		return
 	}
-	err := ct.uc.ExcluirConta(c.Request.Context(), id, req)
+	err := ct.uc.ExcluirConta(c.Request.Context(), id, req, c.ClientIP())
 	web.Responder(c, http.StatusNoContent, nil, err)
 }

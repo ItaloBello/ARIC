@@ -16,9 +16,10 @@ Backend em Go (Gin) + PostgreSQL (schema `aric`).
    - `docs/migrations/004_projetos_moderacao.sql`
    - `docs/migrations/005_missoes_evidencias.sql`
    - `docs/migrations/006_sessoes.sql`
+   - `docs/migrations/007_tentativas_acesso.sql`
 
-   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql` e depois do 003 ao 006.
-   Do 003 ao 006, todos podem ser rodados mais de uma vez sem erro.
+   Banco criado com o script antigo? Rode `002_ajustes_usuarios.sql` e depois do 003 ao 007.
+   Do 003 ao 007, todos podem ser rodados mais de uma vez sem erro.
 
    O modelo de dados, as regras de XP/ligas/missões e as consultas de cada tela estão em
    [`docs/modelo-dados.md`](docs/modelo-dados.md).
@@ -102,6 +103,32 @@ para e-mail inexistente e senha errada).
 ### (GET) /auth/me  🔒
 
 Devolve o objeto `usuario` do dono do token. `401` sem token ou com token inválido/expirado.
+
+### Limite de tentativas
+
+Para impedir que alguém fique testando senhas:
+
+| O quê | Limite | Conta como |
+|-------|--------|------------|
+| Senha errada por **e-mail** | 5 em 15 min | Login e confirmações de senha (trocar senha, excluir conta) somam. Acertar a senha zera |
+| Login errado por **IP** | 50 em 15 min | Alto de propósito: escolas e laboratórios saem todos pelo mesmo IP |
+| Cadastro por **IP** | 20 por hora | Só cadastros feitos |
+
+- **Ao passar do limite:** a resposta é `429` com
+  `{"error": "muitas tentativas, tente de novo em 12 minutos"}` e o cabeçalho `Retry-After` (em
+  segundos). O app pode mostrar a mensagem como está.
+- **E-mail que não existe** também é bloqueado, para não revelar quais e-mails estão cadastrados.
+- **Onde fica:** as tentativas ficam em `aric.tentativas_acesso` (não na memória), então valem
+  depois de reiniciar a API e em várias instâncias. Registros com mais de 30 dias são apagados
+  sozinhos.
+- **Para desbloquear alguém na hora:**
+  `DELETE FROM aric.tentativas_acesso WHERE email = 'pessoa@email.com';`
+
+**Atrás do Apache:** o IP real do cliente vem no cabeçalho `X-Forwarded-For`, que o `ProxyPass`
+já envia. A API só confia nesse cabeçalho quando a requisição vem de um proxy listado em
+`TRUSTED_PROXIES` (padrão `127.0.0.1,::1`, o Apache na mesma máquina). Se o Apache estiver em
+outra máquina, coloque o IP dele em `TRUSTED_PROXIES`. Senão, todo mundo vai aparecer com o IP
+do proxy e o limite por IP vai bloquear todos juntos.
 
 ### Editar perfil  🔒
 
