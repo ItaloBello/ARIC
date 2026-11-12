@@ -332,3 +332,14 @@ type somaProgressoRow struct {
 	Titulo      string       `db:"titulo"`
 	MissaoID    int          `db:"missao_id"`
 }
+
+// ImpactoBairro alimenta o card "Impacto do bairro" da Home ("Hoje evitamos 184 kg").
+type ImpactoBairro struct {
+	BairroID     int     `db:"bairro_id" json:"bairroId"`
+	Bairro       string  `db:"bairro" json:"bairro"`
+	KgHoje       float64 `db:"kg_hoje" json:"kgHoje"`
+	ProjetosHoje int     `db:"projetos_hoje" json:"projetosHoje"` // projetos concluídos hoje
+	PessoasHoje  int     `db:"pessoas_hoje" json:"pessoasHoje"`   // moradores diferentes que concluíram hoje
+	KgSemana     float64 `db:"kg_semana" json:"kgSemana"`
+	KgTotal      float64 `db:"kg_total" json:"kgTotal"`
+}

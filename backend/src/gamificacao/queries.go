@@ -177,3 +177,28 @@ SELECT aric.inicio_semana(now()) - 7 AS semana,
                WHERE semana_inicio = aric.inicio_semana(now()) - 7) AS fechada`
 
 const qFecharSemana = `SELECT aric.fechar_semana_ligas($1::date)`
+
+// ---------- impacto do bairro (Home) ----------
+
+// Resíduos reaproveitados pelos moradores do bairro do usuário: hoje, nesta semana e no total.
+// "Hoje" e "semana" seguem o horário de São Paulo.
+const qImpactoBairro = `
+WITH limites AS (
+    SELECT (now() AT TIME ZONE 'America/Sao_Paulo')::date::timestamp
+               AT TIME ZONE 'America/Sao_Paulo' AS inicio_hoje,
+           aric.inicio_semana(now())::timestamp AT TIME ZONE 'America/Sao_Paulo' AS inicio_semana
+)
+SELECT b.id AS bairro_id, b.nome AS bairro,
+       COALESCE(SUM(p.residuos_kg) FILTER (WHERE pc.data_conclusao >= l.inicio_hoje), 0)::float8 AS kg_hoje,
+       count(pc.usuario_id) FILTER (WHERE pc.data_conclusao >= l.inicio_hoje) AS projetos_hoje,
+       count(DISTINCT pc.usuario_id) FILTER (WHERE pc.data_conclusao >= l.inicio_hoje) AS pessoas_hoje,
+       COALESCE(SUM(p.residuos_kg) FILTER (WHERE pc.data_conclusao >= l.inicio_semana), 0)::float8 AS kg_semana,
+       COALESCE(SUM(p.residuos_kg), 0)::float8 AS kg_total
+FROM aric.usuarios eu
+JOIN aric.bairros b ON b.id = eu.bairro_id
+CROSS JOIN limites l
+LEFT JOIN aric.usuarios u ON u.bairro_id = b.id AND u.deletado_em IS NULL
+LEFT JOIN aric.projetos_conclusoes pc ON pc.usuario_id = u.id
+LEFT JOIN aric.projetos p ON p.id = pc.projeto_id
+WHERE eu.id = $1
+GROUP BY b.id, b.nome`

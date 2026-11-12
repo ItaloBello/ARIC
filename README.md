@@ -301,6 +301,7 @@ Todas as rotas exigem token.
 | GET | `/usuarios/:id/perfil` | Perfil público de outra pessoa (sem e-mail e endereço) |
 | GET | `/gamificacao/niveis` | Os 10 níveis com o XP mínimo de cada |
 | GET | `/gamificacao/xp` | Meu histórico de XP (paginado) |
+| GET | `/gamificacao/impacto-bairro` | Card "Impacto do bairro" da Home: kg reaproveitados pelos moradores do meu bairro hoje, na semana e no total |
 | GET | `/gamificacao/ligas` | As ligas, da mais baixa para a mais alta |
 | GET | `/gamificacao/ranking` | Tela Comunidade: liga, top 50, minha posição, fim da semana e resultado da semana passada |
 | GET | `/gamificacao/missoes` | Missões da semana com progresso |
@@ -337,6 +338,21 @@ Todas as rotas exigem token.
 - **`proximoNivel`:** é `null` no nível máximo.
 - **`vidasInspiradas`:** quantas pessoas diferentes fizeram projetos publicados por este usuário.
 - **Perfil da tela:** troque "#14 no Bairro" por `liga.posicao` + `liga.nome`.
+
+### Impacto do bairro (Home)
+
+```json
+{
+  "bairroId": 1, "bairro": "Centro",
+  "kgHoje": 184.2, "projetosHoje": 37, "pessoasHoje": 21,
+  "kgSemana": 512.0, "kgTotal": 3120.5
+}
+```
+
+- **O que soma:** o `residuosKg` de cada projeto concluído por moradores do bairro.
+- **"Hoje" e "semana":** seguem o horário de São Paulo.
+- **Bairro sem atividade:** tudo vem 0.
+- **Na tela:** "Hoje evitamos 184 kg" usa `kgHoje`.
 
 ### Ranking (tela Comunidade)
 

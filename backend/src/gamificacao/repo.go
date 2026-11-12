@@ -176,3 +176,13 @@ func (r *Repository) FecharSemana(ctx context.Context, semana time.Time) (int, e
 	err := r.db.GetContext(ctx, &n, qFecharSemana, semana.Format("2006-01-02"))
 	return n, err
 }
+
+// ---------- impacto do bairro ----------
+
+func (r *Repository) ImpactoBairro(ctx context.Context, usuarioID int) (*ImpactoBairro, error) {
+	var i ImpactoBairro
+	if err := r.db.GetContext(ctx, &i, qImpactoBairro, usuarioID); err != nil {
+		return nil, err
+	}
+	return &i, nil
+}

@@ -114,6 +114,15 @@ func (ct *Controller) MinhasEvidencias(c *gin.Context) {
 	web.Responder(c, http.StatusOK, pag, err)
 }
 
+func (ct *Controller) ImpactoBairro(c *gin.Context) {
+	uid, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	i, err := ct.uc.ImpactoBairro(c.Request.Context(), uid)
+	web.Responder(c, http.StatusOK, i, err)
+}
+
 // ---------- moderação ----------
 
 func (ct *Controller) EvidenciasPendentes(c *gin.Context) {

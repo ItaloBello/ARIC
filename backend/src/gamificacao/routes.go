@@ -17,6 +17,7 @@ func SetupRoutes(r *gin.RouterGroup, ct *Controller, auth gin.HandlerFunc, busca
 	g.GET("/perfil", ct.MeuPerfil)
 	g.GET("/niveis", ct.Niveis)
 	g.GET("/xp", ct.HistoricoXP)
+	g.GET("/impacto-bairro", ct.ImpactoBairro)
 
 	g.GET("/ligas", ct.Ligas)
 	g.GET("/ranking", ct.Ranking)

@@ -49,7 +49,7 @@ erDiagram
 
 | Tela | O que aparece | Onde está |
 |------|---------------|-----------|
-| Home | Impacto do bairro ("184 kg") | soma de `projetos.residuos_kg` das `projetos_conclusoes` de hoje dos moradores do bairro |
+| Home | Impacto do bairro ("184 kg") | soma de `projetos.residuos_kg` das `projetos_conclusoes` de hoje dos moradores do bairro (rota `GET /gamificacao/impacto-bairro`) |
 | Home | Busca e chips de categoria | `projetos.busca` (full-text em português) e `categorias` (`tipo`, `cor`) |
 | Home | Destaque da semana | `projetos_destaques` |
 | Home | Criações da vizinhança | `projetos` com `autor_id` de usuários do mesmo bairro/cidade |

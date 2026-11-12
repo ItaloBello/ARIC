@@ -409,6 +409,20 @@ func (u *UseCases) RejeitarEvidencia(ctx context.Context, moderadorID, evidencia
 	})
 }
 
+// ---------- impacto do bairro ----------
+
+// ImpactoBairro soma os resíduos reaproveitados pelos moradores do bairro do usuário.
+func (u *UseCases) ImpactoBairro(ctx context.Context, usuarioID int) (*ImpactoBairro, error) {
+	i, err := u.repo.ImpactoBairro(ctx, usuarioID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, apperror.NotFound("usuário não encontrado")
+	}
+	if err != nil {
+		return nil, interno("erro ao calcular impacto do bairro", err)
+	}
+	return i, nil
+}
+
 // ---------- erros ----------
 
 func interno(msg string, err error) error {
