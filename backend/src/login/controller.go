@@ -3,6 +3,7 @@ package login
 import (
 	"ARIC/src/middleware"
 	"ARIC/utils/apperror"
+	"ARIC/utils/web"
 	"errors"
 	"mime/multipart"
 	"net/http"
@@ -82,4 +83,72 @@ func (ct *LoginController) Me(c *gin.Context) {
 
 func responderErro(c *gin.Context, err error) {
 	apperror.Responder(c, err)
+}
+
+// ---------- edição de perfil ----------
+
+func (ct *LoginController) AtualizarPerfil(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	var req PerfilRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dados do perfil inválidos"})
+		return
+	}
+	resp, err := ct.uc.AtualizarPerfil(c.Request.Context(), id, req)
+	web.Responder(c, http.StatusOK, resp, err)
+}
+
+// AtualizarFoto recebe multipart/form-data com o campo "foto".
+func (ct *LoginController) AtualizarFoto(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	foto, err := c.FormFile("foto")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "envie o arquivo no campo 'foto'"})
+		return
+	}
+	resp, err := ct.uc.AtualizarFoto(c.Request.Context(), id, foto)
+	web.Responder(c, http.StatusOK, resp, err)
+}
+
+func (ct *LoginController) RemoverFoto(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	resp, err := ct.uc.RemoverFoto(c.Request.Context(), id)
+	web.Responder(c, http.StatusOK, resp, err)
+}
+
+func (ct *LoginController) AtualizarEndereco(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	var req EnderecoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dados do endereço inválidos"})
+		return
+	}
+	resp, err := ct.uc.AtualizarEndereco(c.Request.Context(), id, req)
+	web.Responder(c, http.StatusOK, resp, err)
+}
+
+func (ct *LoginController) TrocarSenha(c *gin.Context) {
+	id, ok := web.Usuario(c)
+	if !ok {
+		return
+	}
+	var req SenhaRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "dados inválidos"})
+		return
+	}
+	err := ct.uc.TrocarSenha(c.Request.Context(), id, req)
+	web.Responder(c, http.StatusNoContent, nil, err)
 }

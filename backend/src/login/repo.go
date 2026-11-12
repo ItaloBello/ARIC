@@ -4,6 +4,7 @@ import (
 	"ARIC/src/cidade"
 	"ARIC/src/usuario"
 	"context"
+	"database/sql"
 	"errors"
 	"strings"
 
@@ -107,4 +108,66 @@ func (r *LoginRepository) GetUsuarioByID(ctx context.Context, id int) (*usuario.
 		return nil, err
 	}
 	return &u, nil
+}
+
+// ---------- edição de perfil ----------
+
+// ErrUsuarioNaoEncontrado: o UPDATE não achou o usuário (inexistente ou apagado).
+var ErrUsuarioNaoEncontrado = errors.New("usuário não encontrado")
+
+const qAtualizarPerfil = `
+UPDATE aric.usuarios SET nome = $2, bio = $3, atualizado_em = now()
+WHERE id = $1 AND deletado_em IS NULL`
+
+// Devolve a foto antiga para o arquivo poder ser apagado.
+// A CTE lê o valor de antes do UPDATE.
+const qTrocarFoto = `
+WITH antiga AS (
+    SELECT id, foto_url FROM aric.usuarios
+    WHERE id = $1 AND deletado_em IS NULL
+    FOR UPDATE
+)
+UPDATE aric.usuarios u
+SET foto_url = $2, atualizado_em = now()
+FROM antiga
+WHERE u.id = antiga.id
+RETURNING antiga.foto_url`
+
+const qAtualizarEndereco = `
+UPDATE aric.usuarios
+SET cep = $2, bairro_id = $3, logradouro = $4, numero_endereco = $5,
+    complemento_endereco = $6, atualizado_em = now()
+WHERE id = $1 AND deletado_em IS NULL`
+
+const qAtualizarSenha = `
+UPDATE aric.usuarios SET senha_hash = $2, atualizado_em = now()
+WHERE id = $1 AND deletado_em IS NULL`
+
+func (r *LoginRepository) exec1(ctx context.Context, query string, args ...any) error {
+	res, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrUsuarioNaoEncontrado
+	}
+	return nil
+}
+
+func (r *LoginRepository) AtualizarPerfil(ctx context.Context, id int, nome string, bio sql.NullString) error {
+	return r.exec1(ctx, qAtualizarPerfil, id, nome, bio)
+}
+
+func (r *LoginRepository) TrocarFoto(ctx context.Context, id int, nova sql.NullString) (sql.NullString, error) {
+	var antiga sql.NullString
+	err := r.db.GetContext(ctx, &antiga, qTrocarFoto, id, nova)
+	return antiga, err
+}
+
+func (r *LoginRepository) AtualizarEndereco(ctx context.Context, id int, cep string, bairroID int, logradouro, numero string, complemento sql.NullString) error {
+	return r.exec1(ctx, qAtualizarEndereco, id, cep, bairroID, logradouro, numero, complemento)
+}
+
+func (r *LoginRepository) AtualizarSenha(ctx context.Context, id int, hash string) error {
+	return r.exec1(ctx, qAtualizarSenha, id, hash)
 }

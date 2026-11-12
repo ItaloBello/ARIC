@@ -40,11 +40,8 @@ func (c *Cadastro) Normalizar() {
 
 // Validar checa os campos que não dependem do banco nem do ViaCEP.
 func (c *Cadastro) Validar() error {
-	if c.Nome == "" {
-		return errors.New("nome é obrigatório")
-	}
-	if utf8.RuneCountInString(c.Nome) > 255 {
-		return errors.New("nome deve ter no máximo 255 caracteres")
+	if err := validarNome(c.Nome); err != nil {
+		return err
 	}
 	if c.Email == "" {
 		return errors.New("e-mail é obrigatório")
@@ -52,32 +49,65 @@ func (c *Cadastro) Validar() error {
 	if !emailValido(c.Email) {
 		return errors.New("e-mail inválido")
 	}
-	if len(c.Cep) != 8 {
-		return errors.New("CEP deve ter 8 dígitos")
+	if err := validarEndereco(c.Cep, c.NumeroEndereco, c.ComplementoEndereco); err != nil {
+		return err
 	}
-	if c.NumeroEndereco == "" {
-		return errors.New("número do endereço é obrigatório")
+	if err := validarBio(c.Bio); err != nil {
+		return err
 	}
-	if len(c.NumeroEndereco) > 20 {
-		return errors.New("número do endereço deve ter no máximo 20 caracteres")
-	}
-	return c.validarSenha()
+	return validarSenhaForte(c.Senha, c.ConfirmarSenha)
 }
 
-func (c *Cadastro) validarSenha() error {
-	if c.Senha != c.ConfirmarSenha {
+func validarNome(nome string) error {
+	if nome == "" {
+		return errors.New("nome é obrigatório")
+	}
+	if utf8.RuneCountInString(nome) > 255 {
+		return errors.New("nome deve ter no máximo 255 caracteres")
+	}
+	return nil
+}
+
+func validarBio(bio string) error {
+	if utf8.RuneCountInString(bio) > maxBio {
+		return errors.New("a bio deve ter no máximo 500 caracteres")
+	}
+	return nil
+}
+
+func validarEndereco(cep, numero, complemento string) error {
+	if len(cep) != 8 {
+		return errors.New("CEP deve ter 8 dígitos")
+	}
+	if numero == "" {
+		return errors.New("número do endereço é obrigatório")
+	}
+	if len(numero) > 20 {
+		return errors.New("número do endereço deve ter no máximo 20 caracteres")
+	}
+	if utf8.RuneCountInString(complemento) > 255 {
+		return errors.New("complemento deve ter no máximo 255 caracteres")
+	}
+	return nil
+}
+
+const maxBio = 500
+
+// validarSenhaForte: 8 a 72 caracteres, com maiúscula, minúscula, número e caractere especial.
+func validarSenhaForte(senha, confirmar string) error {
+	if senha != confirmar {
 		return errors.New("as senhas não coincidem")
 	}
-	if utf8.RuneCountInString(c.Senha) < 8 {
+	if utf8.RuneCountInString(senha) < 8 {
 		return errors.New("a senha deve ter pelo menos 8 caracteres")
 	}
 	// bcrypt ignora tudo depois de 72 bytes
-	if len(c.Senha) > 72 {
+	if len(senha) > 72 {
 		return errors.New("a senha deve ter no máximo 72 caracteres")
 	}
 
 	var maiuscula, minuscula, digito, especial bool
-	for _, r := range c.Senha {
+	for _, r := range senha {
 		switch {
 		case unicode.IsUpper(r):
 			maiuscula = true

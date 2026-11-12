@@ -53,37 +53,9 @@ func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipar
 		return nil, apperror.Conflict("e-mail já cadastrado")
 	}
 
-	// Endereço a partir do CEP
-	end, err := u.cep.Buscar(ctx, c.Cep)
-	switch {
-	case errors.Is(err, viacep.ErrCepInvalido), errors.Is(err, viacep.ErrCepNaoEncontrado):
-		return nil, apperror.BadRequest(err.Error())
-	case err != nil:
-		log.Println("[Registro] ViaCEP:", err)
-		return nil, apperror.BadGateway("não foi possível consultar o CEP agora, tente novamente")
-	}
-
-	cid, err := u.repo.GetCidadeByNomeUF(ctx, end.Localidade, end.UF)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, apperror.BadRequest("cidade do CEP não encontrada: " + end.Localidade + "/" + end.UF)
-	}
+	bairroID, logradouro, err := u.resolverEndereco(ctx, c.Cep, c.Bairro, c.Logradouro)
 	if err != nil {
-		return nil, interno("erro ao buscar cidade", err)
-	}
-
-	// CEP único de cidade pequena vem sem bairro/logradouro: usa o que o usuário digitou
-	nomeBairro := primeiroNaoVazio(end.Bairro, c.Bairro)
-	if nomeBairro == "" {
-		return nil, apperror.BadRequest("este CEP não informa o bairro, preencha o campo bairro")
-	}
-	logradouro := primeiroNaoVazio(end.Logradouro, c.Logradouro)
-	if logradouro == "" {
-		return nil, apperror.BadRequest("este CEP não informa a rua, preencha o campo logradouro")
-	}
-
-	bairroID, err := u.repo.UpsertBairro(ctx, nomeBairro, bairro.Normalizar(nomeBairro), cid.ID)
-	if err != nil {
-		return nil, interno("erro ao salvar bairro", err)
+		return nil, err
 	}
 
 	nivelID, err := u.repo.GetNivelInicialID(ctx)
@@ -129,6 +101,42 @@ func (u *LoginUseCases) Registro(ctx context.Context, c Cadastro, foto *multipar
 	}
 
 	return u.autenticar(criado)
+}
+
+// resolverEndereco busca o CEP no ViaCEP, acha a cidade na base e cria o bairro se ainda não
+// existir. CEP único de cidade pequena vem sem bairro/rua: aí usa o que o usuário digitou.
+func (u *LoginUseCases) resolverEndereco(ctx context.Context, cep, bairroInformado, logradouroInformado string) (int, string, error) {
+	end, err := u.cep.Buscar(ctx, cep)
+	switch {
+	case errors.Is(err, viacep.ErrCepInvalido), errors.Is(err, viacep.ErrCepNaoEncontrado):
+		return 0, "", apperror.BadRequest(err.Error())
+	case err != nil:
+		log.Println("[login] ViaCEP:", err)
+		return 0, "", apperror.BadGateway("não foi possível consultar o CEP agora, tente novamente")
+	}
+
+	cid, err := u.repo.GetCidadeByNomeUF(ctx, end.Localidade, end.UF)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, "", apperror.BadRequest("cidade do CEP não encontrada: " + end.Localidade + "/" + end.UF)
+	}
+	if err != nil {
+		return 0, "", interno("erro ao buscar cidade", err)
+	}
+
+	nomeBairro := primeiroNaoVazio(end.Bairro, bairroInformado)
+	if nomeBairro == "" {
+		return 0, "", apperror.BadRequest("este CEP não informa o bairro, preencha o campo bairro")
+	}
+	logradouro := primeiroNaoVazio(end.Logradouro, logradouroInformado)
+	if logradouro == "" {
+		return 0, "", apperror.BadRequest("este CEP não informa a rua, preencha o campo logradouro")
+	}
+
+	bairroID, err := u.repo.UpsertBairro(ctx, nomeBairro, bairro.Normalizar(nomeBairro), cid.ID)
+	if err != nil {
+		return 0, "", interno("erro ao salvar bairro", err)
+	}
+	return bairroID, logradouro, nil
 }
 
 func (u *LoginUseCases) Login(ctx context.Context, l Login) (*AuthResponse, error) {

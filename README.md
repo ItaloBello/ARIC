@@ -21,6 +21,7 @@ Backend em Go (Gin) + PostgreSQL (schema `aric`).
 
    O modelo de dados, as regras de XP/ligas/missões e as consultas de cada tela estão em
    [`docs/modelo-dados.md`](docs/modelo-dados.md).
+
 3. Copie `backend/cmd/api/.env.example` para `backend/cmd/api/.env` e preencha (o `JWT_SECRET` precisa ter 32+ caracteres).
 4. Em `backend/`: `go mod tidy`
 5. Em `backend/cmd/api/`: `go run .`
@@ -41,19 +42,19 @@ O token é um JWT (HS256) que vale `JWT_EXPIRACAO_HORAS` horas (padrão 24).
 
 Aceita `multipart/form-data` (para enviar foto) ou JSON (sem foto).
 
-| Campo                 | Obrigatório | Observação |
-|-----------------------|:-----------:|------------|
-| nome                  | sim         | |
-| email                 | sim         | gravado em minúsculas |
-| senha                 | sim         | 8 a 72 caracteres, com maiúscula, minúscula, número e caractere especial |
-| confirmarSenha        | sim         | |
-| cep                   | sim         | 8 dígitos, com ou sem traço |
-| numeroEndereco        | sim         | |
-| complementoEndereco   | não         | |
-| bio                   | não         | |
-| foto                  | não         | só multipart; .jpg, .jpeg ou .png, até 5MB |
-| bairro                | só se o CEP não tiver bairro | usado apenas para CEP único de cidade |
-| logradouro            | só se o CEP não tiver rua    | usado apenas para CEP único de cidade |
+| Campo               |         Obrigatório          | Observação                                                               |
+| ------------------- | :--------------------------: | ------------------------------------------------------------------------ |
+| nome                |             sim              |                                                                          |
+| email               |             sim              | gravado em minúsculas                                                    |
+| senha               |             sim              | 8 a 72 caracteres, com maiúscula, minúscula, número e caractere especial |
+| confirmarSenha      |             sim              |                                                                          |
+| cep                 |             sim              | 8 dígitos, com ou sem traço                                              |
+| numeroEndereco      |             sim              |                                                                          |
+| complementoEndereco |             não              |                                                                          |
+| bio                 |             não              |                                                                          |
+| foto                |             não              | só multipart; .jpg, .jpeg ou .png, até 5MB                               |
+| bairro              | só se o CEP não tiver bairro | usado apenas para CEP único de cidade                                    |
+| logradouro          |  só se o CEP não tiver rua   | usado apenas para CEP único de cidade                                    |
 
 Estado e cidade **não são enviados**: vêm do CEP (ViaCEP). O bairro é criado automaticamente
 na primeira vez que aparece (`aric.bairros`, normalizado sem acento e em minúsculas).
@@ -68,11 +69,19 @@ Resposta `201`: o usuário já sai logado.
   "token": "eyJhbGciOi...",
   "expiraEm": "2026-11-04T22:00:00Z",
   "usuario": {
-    "id": 1, "nome": "Maria Silva", "email": "maria@email.com",
-    "fotoUrl": "/uploads/usuarios/123.jpg", "bio": null,
-    "cep": "18035000", "bairroId": 4, "logradouro": "Rua X",
-    "numeroEndereco": "100", "complementoEndereco": null,
-    "xpTotal": 0, "nivelId": 1, "sequenciaDias": 0,
+    "id": 1,
+    "nome": "Maria Silva",
+    "email": "maria@email.com",
+    "fotoUrl": "/uploads/usuarios/123.jpg",
+    "bio": null,
+    "cep": "18035000",
+    "bairroId": 4,
+    "logradouro": "Rua X",
+    "numeroEndereco": "100",
+    "complementoEndereco": null,
+    "xpTotal": 0,
+    "nivelId": 1,
+    "sequenciaDias": 0,
     "criadoEm": "2026-11-03T22:00:00Z"
   }
 }
@@ -91,9 +100,26 @@ JSON: `{ "email": "...", "senha": "..." }`
 `200` com o mesmo formato do registro. `401` com `"e-mail ou senha inválidos"` (a mesma mensagem
 para e-mail inexistente e senha errada).
 
-### (GET) /auth/me  🔒
+### (GET) /auth/me 🔒
 
 Devolve o objeto `usuario` do dono do token. `401` sem token ou com token inválido/expirado.
+
+### Editar perfil 🔒
+
+Todas devolvem o usuário atualizado (mesmo formato do `GET /auth/me`), exceto a de senha.
+
+| Método | Rota                | Corpo                                                                                                                                                                                       |
+| ------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PUT    | `/auth/me`          | `{"nome": "...", "bio": "..."}`. Bio vazia apaga a bio (máximo de 500 caracteres)                                                                                                           |
+| PUT    | `/auth/me/foto`     | multipart, campo `foto` (.jpg, .jpeg ou .png, até 5MB). A foto antiga é apagada do servidor                                                                                                 |
+| DELETE | `/auth/me/foto`     | Remove a foto                                                                                                                                                                               |
+| PUT    | `/auth/me/endereco` | `{"cep", "numeroEndereco", "complementoEndereco", "bairro", "logradouro"}`. O bairro é recalculado pelo CEP, igual ao cadastro; `bairro` e `logradouro` só são usados se o CEP não os tiver |
+| PUT    | `/auth/me/senha`    | `{"senhaAtual", "novaSenha", "confirmarSenha"}`. Mesmas regras de senha do cadastro → `204`                                                                                                 |
+
+- **Senha atual errada** dá `400` (e não `401`), para o app não confundir com sessão expirada.
+- **Troca de senha e tokens:** os tokens emitidos antes da troca continuam valendo até expirar
+  (24h por padrão).
+- **E-mail:** não muda por aqui. Trocar e-mail com segurança pede confirmação no endereço novo.
 
 ### Exemplo com curl
 
@@ -148,11 +174,19 @@ remover (autor ou moderador) ─▶ removido
   "residuosKg": 1.8,
   "categorias": [1, 13],
   "materiais": [
-    { "nome": "Garrafas PET", "quantidade": "3 (2 litros)", "imagemUrl": "/uploads/projetos/1.jpg" },
+    {
+      "nome": "Garrafas PET",
+      "quantidade": "3 (2 litros)",
+      "imagemUrl": "/uploads/projetos/1.jpg"
+    },
     { "nome": "Tesoura", "quantidade": "1", "imagemUrl": "" }
   ],
   "passos": [
-    { "titulo": "Corte as garrafas", "descricao": "...", "imagemUrl": "/uploads/projetos/2.jpg" }
+    {
+      "titulo": "Corte as garrafas",
+      "descricao": "...",
+      "imagemUrl": "/uploads/projetos/2.jpg"
+    }
   ],
   "imagens": ["/uploads/projetos/capa.jpg", "/uploads/projetos/3.jpg"],
   "rascunho": false
@@ -168,35 +202,35 @@ remover (autor ou moderador) ─▶ removido
 
 ### Rotas
 
-| Método | Rota | O que faz |
-|--------|------|-----------|
-| GET | `/categorias` | Categorias (com `tipo`, `cor`, `icone`) |
-| GET | `/dificuldades` | Dificuldades e o XP de cada uma |
-| GET | `/projetos` | Lista de publicados. Query: `busca`, `categoria`, `dificuldade`, `autor`, `escopo` (`bairro` ou `cidade`, relativo a quem pede), `ordem` (`recentes`, `populares`, `relevancia`), `pagina`, `limite` (máx. 50) |
-| POST | `/projetos/imagens` | Envia uma imagem (multipart, campo `imagem`) |
-| POST | `/projetos` | Cria (JSON acima) |
-| GET | `/projetos/meus` | Meus projetos em qualquer status (com `motivoModeracao` se rejeitado) |
-| GET | `/projetos/salvos` | Projetos que salvei |
-| GET | `/projetos/destaque` | Destaque da semana (`204` se não houver) |
-| GET | `/projetos/:id` | Detalhe: card + descrição, imagens, materiais, passos, `minhaNota`, nº de comentários, `podeEditar` |
-| PUT | `/projetos/:id` | Edita (só o autor; mesmo JSON de criar). Publicado volta para revisão |
-| DELETE | `/projetos/:id` | Remove (autor ou moderador) → `204` |
-| POST | `/projetos/:id/conclusao` | "Eu fiz!" Corpo opcional `{"fotoUrl": "/uploads/projetos/..."}`. Resposta: `xpGanho`, `missoesConcluidas`, `xpTotal`, `nivelId`, `nivelTitulo` |
-| PUT / DELETE | `/projetos/:id/curtida` | Curte / descurte → `{"curtido", "curtidas"}` |
-| PUT / DELETE | `/projetos/:id/salvo` | Salva / tira dos salvos |
-| PUT | `/projetos/:id/avaliacao` | `{"nota": 1..5}`. Só quem concluiu (`403` caso contrário) |
-| GET | `/projetos/:id/comentarios` | Comentários (mais antigos primeiro), com `podeApagar` |
-| POST | `/projetos/:id/comentarios` | `{"conteudo": "..."}` (até 2000 caracteres) |
-| DELETE | `/projetos/:id/comentarios/:comentarioId` | Apaga (autor do comentário ou moderador) |
+| Método       | Rota                                      | O que faz                                                                                                                                                                                                      |
+| ------------ | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET          | `/categorias`                             | Categorias (com `tipo`, `cor`, `icone`)                                                                                                                                                                        |
+| GET          | `/dificuldades`                           | Dificuldades e o XP de cada uma                                                                                                                                                                                |
+| GET          | `/projetos`                               | Lista de publicados. Query: `busca`, `categoria`, `dificuldade`, `autor`, `escopo` (`bairro` ou `cidade`, relativo a quem pede), `ordem` (`recentes`, `populares`, `relevancia`), `pagina`, `limite` (máx. 50) |
+| POST         | `/projetos/imagens`                       | Envia uma imagem (multipart, campo `imagem`)                                                                                                                                                                   |
+| POST         | `/projetos`                               | Cria (JSON acima)                                                                                                                                                                                              |
+| GET          | `/projetos/meus`                          | Meus projetos em qualquer status (com `motivoModeracao` se rejeitado)                                                                                                                                          |
+| GET          | `/projetos/salvos`                        | Projetos que salvei                                                                                                                                                                                            |
+| GET          | `/projetos/destaque`                      | Destaque da semana (`204` se não houver)                                                                                                                                                                       |
+| GET          | `/projetos/:id`                           | Detalhe: card + descrição, imagens, materiais, passos, `minhaNota`, nº de comentários, `podeEditar`                                                                                                            |
+| PUT          | `/projetos/:id`                           | Edita (só o autor; mesmo JSON de criar). Publicado volta para revisão                                                                                                                                          |
+| DELETE       | `/projetos/:id`                           | Remove (autor ou moderador) → `204`                                                                                                                                                                            |
+| POST         | `/projetos/:id/conclusao`                 | "Eu fiz!" Corpo opcional `{"fotoUrl": "/uploads/projetos/..."}`. Resposta: `xpGanho`, `missoesConcluidas`, `xpTotal`, `nivelId`, `nivelTitulo`                                                                 |
+| PUT / DELETE | `/projetos/:id/curtida`                   | Curte / descurte → `{"curtido", "curtidas"}`                                                                                                                                                                   |
+| PUT / DELETE | `/projetos/:id/salvo`                     | Salva / tira dos salvos                                                                                                                                                                                        |
+| PUT          | `/projetos/:id/avaliacao`                 | `{"nota": 1..5}`. Só quem concluiu (`403` caso contrário)                                                                                                                                                      |
+| GET          | `/projetos/:id/comentarios`               | Comentários (mais antigos primeiro), com `podeApagar`                                                                                                                                                          |
+| POST         | `/projetos/:id/comentarios`               | `{"conteudo": "..."}` (até 2000 caracteres)                                                                                                                                                                    |
+| DELETE       | `/projetos/:id/comentarios/:comentarioId` | Apaga (autor do comentário ou moderador)                                                                                                                                                                       |
 
 **Moderação** (só usuários com `papel` moderador ou admin; os outros recebem `403`):
 
-| Método | Rota | O que faz |
-|--------|------|-----------|
-| GET | `/moderacao/projetos` | Fila de revisão, mais antigos primeiro |
-| POST | `/moderacao/projetos/:id/aprovar` | Publica |
-| POST | `/moderacao/projetos/:id/rejeitar` | `{"motivo": "..."}`. Funciona em revisão ou já publicado (tira do ar). O autor vê o motivo |
-| PUT | `/moderacao/destaque` | `{"projetoId": 1}`. Define o destaque da semana atual |
+| Método | Rota                               | O que faz                                                                                  |
+| ------ | ---------------------------------- | ------------------------------------------------------------------------------------------ |
+| GET    | `/moderacao/projetos`              | Fila de revisão, mais antigos primeiro                                                     |
+| POST   | `/moderacao/projetos/:id/aprovar`  | Publica                                                                                    |
+| POST   | `/moderacao/projetos/:id/rejeitar` | `{"motivo": "..."}`. Funciona em revisão ou já publicado (tira do ar). O autor vê o motivo |
+| PUT    | `/moderacao/destaque`              | `{"projetoId": 1}`. Define o destaque da semana atual                                      |
 
 Um moderador não aprova nem rejeita o próprio projeto.
 
@@ -207,15 +241,30 @@ O `GET /auth/me` devolve o `papel`, para o app saber se mostra a área de modera
 
 ```json
 {
-  "id": 1, "titulo": "...", "subtitulo": "...", "status": "publicado",
-  "xp": 80, "tempoEstimado": 25, "residuosKg": 1.8,
+  "id": 1,
+  "titulo": "...",
+  "subtitulo": "...",
+  "status": "publicado",
+  "xp": 80,
+  "tempoEstimado": 25,
+  "residuosKg": 1.8,
   "dificuldade": { "id": 1, "descricao": "Iniciante" },
   "capaUrl": "/uploads/projetos/capa.jpg",
-  "autor": { "id": 3, "nome": "Juliana M.", "fotoUrl": null, "bairro": "Jardim das Flores" },
+  "autor": {
+    "id": 3,
+    "nome": "Juliana M.",
+    "fotoUrl": null,
+    "bairro": "Jardim das Flores"
+  },
   "categorias": [{ "id": 1, "nome": "Plástico", "cor": "#F2B705" }],
-  "curtidas": 24, "conclusoes": 1200, "notaMedia": 4.6,
-  "curtido": false, "salvo": true, "concluido": false,
-  "criadoEm": "...", "publicadoEm": "..."
+  "curtidas": 24,
+  "conclusoes": 1200,
+  "notaMedia": 4.6,
+  "curtido": false,
+  "salvo": true,
+  "concluido": false,
+  "criadoEm": "...",
+  "publicadoEm": "..."
 }
 ```
 
@@ -245,33 +294,33 @@ Todas as rotas exigem token e ficam em `/api/v1/forum`.
 
 ### Rotas
 
-| Método | Rota | O que faz |
-|--------|------|-----------|
-| GET | `/forum/posts` | Lista. Query: `busca`, `categoria`, `tipo` (`duvida` ou `dica`), `situacao` (`abertas` ou `resolvidas`), `autor`, `ordem` (`recentes`, `votadas` ou `relevancia`), `pagina`, `limite` |
-| POST | `/forum/posts` | Cria: `{"tipo", "titulo", "conteudo", "imagemUrl", "categoriaId"}`. A resposta traz `missoesConcluidas` |
-| POST | `/forum/imagens` | Envia uma imagem |
-| GET | `/forum/posts/salvos` | Posts que salvei |
-| GET | `/forum/posts/:id` | Detalhe com o texto completo e `podeEditar`, `podeApagar` e `podeAceitar` |
-| PUT | `/forum/posts/:id` | Edita título, texto, imagem e categoria (só o autor) |
-| DELETE | `/forum/posts/:id` | Apaga (autor ou moderador) |
-| PUT / DELETE | `/forum/posts/:id/curtida` | Curte / descurte |
-| PUT / DELETE | `/forum/posts/:id/salvo` | Salva / tira dos salvos |
-| PUT | `/forum/posts/:id/resposta-aceita` | `{"respostaId": 3}`: marca como resolvida |
-| DELETE | `/forum/posts/:id/resposta-aceita` | Volta para "em aberto" |
-| GET | `/forum/posts/:id/respostas` | Respostas: a aceita primeiro, depois as mais curtidas e depois as mais antigas |
-| POST | `/forum/posts/:id/respostas` | `{"conteudo": "..."}`. A resposta traz `missoesConcluidas` |
-| PUT | `/forum/respostas/:id` | Edita (só o autor) |
-| DELETE | `/forum/respostas/:id` | Apaga (autor ou moderador) |
-| PUT / DELETE | `/forum/respostas/:id/curtida` | Curte / descurte |
+| Método       | Rota                               | O que faz                                                                                                                                                                             |
+| ------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET          | `/forum/posts`                     | Lista. Query: `busca`, `categoria`, `tipo` (`duvida` ou `dica`), `situacao` (`abertas` ou `resolvidas`), `autor`, `ordem` (`recentes`, `votadas` ou `relevancia`), `pagina`, `limite` |
+| POST         | `/forum/posts`                     | Cria: `{"tipo", "titulo", "conteudo", "imagemUrl", "categoriaId"}`. A resposta traz `missoesConcluidas`                                                                               |
+| POST         | `/forum/imagens`                   | Envia uma imagem                                                                                                                                                                      |
+| GET          | `/forum/posts/salvos`              | Posts que salvei                                                                                                                                                                      |
+| GET          | `/forum/posts/:id`                 | Detalhe com o texto completo e `podeEditar`, `podeApagar` e `podeAceitar`                                                                                                             |
+| PUT          | `/forum/posts/:id`                 | Edita título, texto, imagem e categoria (só o autor)                                                                                                                                  |
+| DELETE       | `/forum/posts/:id`                 | Apaga (autor ou moderador)                                                                                                                                                            |
+| PUT / DELETE | `/forum/posts/:id/curtida`         | Curte / descurte                                                                                                                                                                      |
+| PUT / DELETE | `/forum/posts/:id/salvo`           | Salva / tira dos salvos                                                                                                                                                               |
+| PUT          | `/forum/posts/:id/resposta-aceita` | `{"respostaId": 3}`: marca como resolvida                                                                                                                                             |
+| DELETE       | `/forum/posts/:id/resposta-aceita` | Volta para "em aberto"                                                                                                                                                                |
+| GET          | `/forum/posts/:id/respostas`       | Respostas: a aceita primeiro, depois as mais curtidas e depois as mais antigas                                                                                                        |
+| POST         | `/forum/posts/:id/respostas`       | `{"conteudo": "..."}`. A resposta traz `missoesConcluidas`                                                                                                                            |
+| PUT          | `/forum/respostas/:id`             | Edita (só o autor)                                                                                                                                                                    |
+| DELETE       | `/forum/respostas/:id`             | Apaga (autor ou moderador)                                                                                                                                                            |
+| PUT / DELETE | `/forum/respostas/:id/curtida`     | Curte / descurte                                                                                                                                                                      |
 
 **Abas da tela:**
 
-| Aba | Chamada |
-|-----|---------|
-| Mais votadas | `?ordem=votadas` |
-| Recentes | `?ordem=recentes` |
+| Aba             | Chamada             |
+| --------------- | ------------------- |
+| Mais votadas    | `?ordem=votadas`    |
+| Recentes        | `?ordem=recentes`   |
 | Dúvidas abertas | `?situacao=abertas` |
-| Dicas rápidas | `?tipo=dica` |
+| Dicas rápidas   | `?tipo=dica`        |
 
 Textos: título de 5 a 200 caracteres; post e resposta com até 5000.
 
@@ -279,13 +328,21 @@ Textos: título de 5 a 200 caracteres; post e resposta com até 5000.
 
 ```json
 {
-  "id": 1, "tipo": "duvida", "titulo": "O que fazer com caixas de ovos?",
-  "resumo": "primeiros 200 caracteres...", "imagemUrl": null,
-  "resolvido": true, "respostaAceitaId": 7,
+  "id": 1,
+  "tipo": "duvida",
+  "titulo": "O que fazer com caixas de ovos?",
+  "resumo": "primeiros 200 caracteres...",
+  "imagemUrl": null,
+  "resolvido": true,
+  "respostaAceitaId": 7,
   "autor": { "id": 3, "nome": "Ana", "fotoUrl": null, "bairro": "Centro" },
   "categoria": { "id": 2, "nome": "Papelão", "cor": "#B07A4A" },
-  "curtidas": 32, "respostas": 12, "curtido": false, "salvo": false,
-  "criadoEm": "...", "atualizadoEm": "..."
+  "curtidas": 32,
+  "respostas": 12,
+  "curtido": false,
+  "salvo": false,
+  "criadoEm": "...",
+  "atualizadoEm": "..."
 }
 ```
 
@@ -295,41 +352,60 @@ Todas as rotas exigem token.
 
 ### Rotas
 
-| Método | Rota | O que faz |
-|--------|------|-----------|
-| GET | `/gamificacao/perfil` | Meu perfil: nível, barra até o próximo, XP total, sequência, liga com posição e impacto |
-| GET | `/usuarios/:id/perfil` | Perfil público de outra pessoa (sem e-mail e endereço) |
-| GET | `/gamificacao/niveis` | Os 10 níveis com o XP mínimo de cada |
-| GET | `/gamificacao/xp` | Meu histórico de XP (paginado) |
-| GET | `/gamificacao/impacto-bairro` | Card "Impacto do bairro" da Home: kg reaproveitados pelos moradores do meu bairro hoje, na semana e no total |
-| GET | `/gamificacao/ligas` | As ligas, da mais baixa para a mais alta |
-| GET | `/gamificacao/ranking` | Tela Comunidade: liga, top 50, minha posição, fim da semana e resultado da semana passada |
-| GET | `/gamificacao/missoes` | Missões da semana com progresso |
-| POST | `/gamificacao/missoes/imagens` | Envia a foto de uma missão (multipart, campo `imagem`) |
-| POST | `/gamificacao/missoes/:id/evidencias` | `{"fotoUrl", "quantidade"}`: manda a foto para análise |
-| GET | `/gamificacao/evidencias` | Minhas fotos enviadas, com status e motivo da rejeição |
+| Método | Rota                                  | O que faz                                                                                                    |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| GET    | `/gamificacao/perfil`                 | Meu perfil: nível, barra até o próximo, XP total, sequência, liga com posição e impacto                      |
+| GET    | `/usuarios/:id/perfil`                | Perfil público de outra pessoa (sem e-mail e endereço)                                                       |
+| GET    | `/gamificacao/niveis`                 | Os 10 níveis com o XP mínimo de cada                                                                         |
+| GET    | `/gamificacao/xp`                     | Meu histórico de XP (paginado)                                                                               |
+| GET    | `/gamificacao/impacto-bairro`         | Card "Impacto do bairro" da Home: kg reaproveitados pelos moradores do meu bairro hoje, na semana e no total |
+| GET    | `/gamificacao/ligas`                  | As ligas, da mais baixa para a mais alta                                                                     |
+| GET    | `/gamificacao/ranking`                | Tela Comunidade: liga, top 50, minha posição, fim da semana e resultado da semana passada                    |
+| GET    | `/gamificacao/missoes`                | Missões da semana com progresso                                                                              |
+| POST   | `/gamificacao/missoes/imagens`        | Envia a foto de uma missão (multipart, campo `imagem`)                                                       |
+| POST   | `/gamificacao/missoes/:id/evidencias` | `{"fotoUrl", "quantidade"}`: manda a foto para análise                                                       |
+| GET    | `/gamificacao/evidencias`             | Minhas fotos enviadas, com status e motivo da rejeição                                                       |
 
 **Moderação** (só moderador ou admin):
 
-| Método | Rota | O que faz |
-|--------|------|-----------|
-| GET | `/moderacao/evidencias` | Fotos aguardando análise, mais antigas primeiro |
-| POST | `/moderacao/evidencias/:id/aprovar` | Soma no progresso. Se bater a meta, conclui a missão e dá o XP |
-| POST | `/moderacao/evidencias/:id/rejeitar` | `{"motivo": "..."}`. O usuário vê o motivo |
+| Método | Rota                                 | O que faz                                                      |
+| ------ | ------------------------------------ | -------------------------------------------------------------- |
+| GET    | `/moderacao/evidencias`              | Fotos aguardando análise, mais antigas primeiro                |
+| POST   | `/moderacao/evidencias/:id/aprovar`  | Soma no progresso. Se bater a meta, conclui a missão e dá o XP |
+| POST   | `/moderacao/evidencias/:id/rejeitar` | `{"motivo": "..."}`. O usuário vê o motivo                     |
 
 ### Perfil
 
 ```json
 {
-  "id": 1, "nome": "Ana", "fotoUrl": null, "bio": null,
-  "bairro": "Centro", "cidade": "Sorocaba", "uf": "SP", "membroDesde": "...",
+  "id": 1,
+  "nome": "Ana",
+  "fotoUrl": null,
+  "bio": null,
+  "bairro": "Centro",
+  "cidade": "Sorocaba",
+  "uf": "SP",
+  "membroDesde": "...",
   "xpTotal": 850,
   "nivel": { "numero": 4, "titulo": "Coletor Consciente", "minimoXp": 600 },
   "proximoNivel": { "numero": 5, "titulo": "Reciclador", "minimoXp": 1000 },
-  "xpParaProximo": 150, "progressoNivel": 62,
+  "xpParaProximo": 150,
+  "progressoNivel": 62,
   "sequenciaDias": 18,
-  "liga": { "id": 2, "nome": "Liga Broto", "ordem": 2, "icone": null, "posicao": 14, "xpSemana": 184 },
-  "impacto": { "residuosKg": 12.4, "projetosConcluidos": 9, "projetosPublicados": 2, "vidasInspiradas": 12 }
+  "liga": {
+    "id": 2,
+    "nome": "Liga Broto",
+    "ordem": 2,
+    "icone": null,
+    "posicao": 14,
+    "xpSemana": 184
+  },
+  "impacto": {
+    "residuosKg": 12.4,
+    "projetosConcluidos": 9,
+    "projetosPublicados": 2,
+    "vidasInspiradas": 12
+  }
 }
 ```
 
@@ -343,9 +419,13 @@ Todas as rotas exigem token.
 
 ```json
 {
-  "bairroId": 1, "bairro": "Centro",
-  "kgHoje": 184.2, "projetosHoje": 37, "pessoasHoje": 21,
-  "kgSemana": 512.0, "kgTotal": 3120.5
+  "bairroId": 1,
+  "bairro": "Centro",
+  "kgHoje": 184.2,
+  "projetosHoje": 37,
+  "pessoasHoje": 21,
+  "kgSemana": 512.0,
+  "kgTotal": 3120.5
 }
 ```
 
