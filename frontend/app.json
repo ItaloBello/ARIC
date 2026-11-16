@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "ARIC",
+    "slug": "aric-app",
+    "version": "3.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "aric",
+    "icon": "./assets/branding/icon.png",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "android": {
+      "package": "com.aric.app",
+      "versionCode": 5,
+      "predictiveBackGestureEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/branding/adaptive-icon.png",
+        "backgroundColor": "#F8F7F2"
+      }
+    },
+    "ios": {
+      "bundleIdentifier": "com.aric.app",
+      "buildNumber": "5",
+      "supportsTablet": false,
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "web": {
+      "favicon": "./assets/branding/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/branding/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F8F7F2"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2aa47dc0-4b9a-411a-9460-c544db60eff2"
+      }
+    }
+  }
+}
